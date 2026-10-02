@@ -1,10 +1,11 @@
 // Выгрузки 1С (КАТ-5): выбрать файлы → увидеть, что узнано и что изменится → загрузить.
-// Владельцу и управляющему; закупку и остатки — только владелец (так же решает сервер).
+// Владельцу и управляющему; закупку, остатки и продажи — только владелец (так же решает сервер).
 import { useRef, useState } from 'react';
 import type { CatalogProduct } from '../../../api/catalog';
-import { importCatalog, importInternals } from '../../../api/importCatalog';
+import { importCatalog, importInternals, importSales } from '../../../api/importCatalog';
 import { ru } from '../../../shared/i18n/ru';
 import { Row, Section } from '../../../shared/ui/List';
+import { formatPeriod } from '../../../shared/date';
 import { keepAwake } from '../../../shared/wakeLock';
 import type { CatalogGroup } from '../search';
 import { buildImportPlan, type ImportPlan, type ParsedReport } from './plan';
@@ -22,7 +23,7 @@ interface Props {
   storeId: string;
   products: readonly CatalogProduct[];
   groups: readonly CatalogGroup[];
-  /** Владелец: может загружать закупку и остатки. */
+  /** Владелец: может загружать закупку, остатки и продажи. */
   canWriteInternals: boolean;
   /** Каталог ещё сверяется с сервером: план по старой копии показал бы неверные числа. */
   refreshing: boolean;
@@ -56,7 +57,15 @@ export function OneCImport({ storeId, products, groups, canWriteInternals, refre
           setState({ kind: 'running', text: t.oneCProgressInternals(done, total) }));
         internals = totals.changed;
       }
-      setState({ kind: 'done', text: t.oneCDone(plan.stats.created, plan.stats.changed, internals) });
+      let sold = 0;
+      if (canWriteInternals) {
+        for (const sales of plan.sales) {
+          if (!sales.rows.length) continue;
+          sold += await importSales(storeId, sales, sales.rows, (done, total) =>
+            setState({ kind: 'running', text: t.oneCProgressSales(done, total) }));
+        }
+      }
+      setState({ kind: 'done', text: t.oneCDone(plan.stats.created, plan.stats.changed, internals, sold) });
       onImported();
     } catch {
       setState({ kind: 'error' });
@@ -102,7 +111,7 @@ export function OneCImport({ storeId, products, groups, canWriteInternals, refre
             />
           ))}
           <PlanSummary plan={state.plan} canWriteInternals={canWriteInternals} />
-          {state.plan.products.length || (canWriteInternals && state.plan.internals.length) ? (
+          {hasWork(state.plan, canWriteInternals) ? (
             <Row title={t.oneCConfirm} tone="link" onClick={() => void run(state.plan)} />
           ) : null}
           <Row title={t.cancel} tone="muted" onClick={() => setState({ kind: 'idle' })} />
@@ -124,13 +133,21 @@ export function OneCImport({ storeId, products, groups, canWriteInternals, refre
   );
 }
 
+const salesRows = (plan: ImportPlan) => plan.sales.reduce((n, s) => n + s.rows.length, 0);
+const hasWork = (plan: ImportPlan, canWriteInternals: boolean) =>
+  plan.products.length > 0 || (canWriteInternals && (plan.internals.length > 0 || salesRows(plan) > 0));
+
 function PlanSummary({ plan, canWriteInternals }: { plan: ImportPlan; canWriteInternals: boolean }) {
   const t = ru.catalog.import;
-  const nothing = !plan.products.length && !(canWriteInternals && plan.internals.length);
+  const closed = plan.internals.length > 0 || salesRows(plan) > 0;
   return (
     <>
-      <Row title={nothing ? t.oneCNothing : t.oneCPlan(plan.stats.created, plan.stats.changed)} tone="muted" />
-      {plan.internals.length > 0 && <Row title={canWriteInternals ? t.oneCInternals(plan.internals.length) : t.oneCOwnerOnly} tone="muted" />}
+      <Row title={hasWork(plan, canWriteInternals) ? t.oneCPlan(plan.stats.created, plan.stats.changed) : t.oneCNothing} tone="muted" />
+      {plan.internals.length > 0 && canWriteInternals && <Row title={t.oneCInternals(plan.internals.length)} tone="muted" />}
+      {canWriteInternals && plan.sales.map((s) => (
+        <Row key={`${s.from}:${s.to}`} title={t.oneCSales(formatPeriod(s.from, s.to), s.rows.length)} tone="muted" />
+      ))}
+      {closed && !canWriteInternals && <Row title={t.oneCOwnerOnly} tone="muted" />}
       {plan.stats.unmatched > 0 && <Row title={t.oneCUnmatched(plan.stats.unmatched)} tone="muted" />}
     </>
   );

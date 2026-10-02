@@ -1,8 +1,11 @@
 // КАТ-6: закрытые отчёты только по запросу, без localStorage / IndexedDB.
 import { api } from './client';
 
-export const issueKinds = ['missing_price', 'below_cost', 'no_markup', 'duplicate_barcodes'] as const;
+export const issueKinds = ['missing_price', 'below_cost', 'no_markup', 'duplicate_barcodes', 'price_rise', 'bestsellers'] as const;
 export type IssueKind = (typeof issueKinds)[number];
+/** Проверки цен и кодов; остальное — отчёты по истории цен и продажам. */
+export const checkKinds: readonly IssueKind[] = ['missing_price', 'below_cost', 'no_markup', 'duplicate_barcodes'];
+export const reportKinds: readonly IssueKind[] = ['price_rise', 'bestsellers'];
 export interface CatalogIssue {
   id: string;
   name: string;
@@ -12,11 +15,21 @@ export interface CatalogIssue {
   purchasePrice: bigint | null;
   barcode: string | null;
   barcodeCount: number | null;
+  /** «Подорожало»: какая цена, сколько было и стало, когда менялась последний раз. */
+  priceKind: 'retail' | 'purchase' | null;
+  oldPrice: bigint | null;
+  newPrice: bigint | null;
+  changedAt: string | null;
+  /** «Ходовые»: продано за период и выручка в копейках. */
+  qty: number | null;
+  amount: bigint | null;
 }
 export interface CatalogIssues {
   counts: Record<IssueKind, number>;
   total: number;
   items: CatalogIssue[];
+  /** Период отчёта продаж, по которому считаются «Ходовые»; null — продажи не загружены. */
+  salesPeriod: { from: string; to: string } | null;
 }
 
 export class CatalogToolsError extends Error {
@@ -32,17 +45,33 @@ const nullableText = (value: unknown): value is string | null => value === null 
 const invalid = (): never => { throw new CatalogToolsError('invalid'); };
 
 /** Копейки не проходят через number: различаем даже соседние bigint за пределами его точности. */
-function price(value: unknown): bigint | null {
+function price(value: unknown, signed = false): bigint | null {
   if (value === null) return null;
-  if (typeof value !== 'string' || !/^\d+$/.test(value)) return invalid();
-  if (value.length > 19) return invalid();
+  if (typeof value !== 'string' || !(signed ? /^-?\d+$/ : /^\d+$/).test(value)) return invalid();
+  if (value.replace('-', '').length > 19) return invalid();
   const amount = BigInt(value);
-  return amount <= 9223372036854775807n ? amount : invalid();
+  return amount <= 9223372036854775807n && amount >= -9223372036854775808n ? amount : invalid();
+}
+/** Поля отчётов есть не у всех видов: отсутствие — то же, что null. */
+const optional = (value: unknown) => (value === undefined ? null : value);
+const day = /^\d{4}-\d{2}-\d{2}$/;
+
+function quantity(value: unknown): number | null {
+  if (value === null) return null;
+  if (typeof value !== 'string' || !/^-?\d{1,12}(\.\d{1,3})?$/.test(value)) return invalid();
+  return Number(value);
+}
+
+function salesPeriod(value: unknown): CatalogIssues['salesPeriod'] {
+  if (value === null || value === undefined) return null;
+  if (!record(value) || typeof value.from !== 'string' || typeof value.to !== 'string'
+    || !day.test(value.from) || !day.test(value.to) || value.from > value.to) return invalid();
+  return { from: value.from, to: value.to };
 }
 
 export function parseCatalogIssues(value: unknown): CatalogIssues {
   if (!record(value) || !record(value.counts) || !count(value.total) || !Array.isArray(value.items)) return invalid();
-  const counts: Record<IssueKind, number> = { missing_price: 0, below_cost: 0, no_markup: 0, duplicate_barcodes: 0 };
+  const counts: Record<IssueKind, number> = { missing_price: 0, below_cost: 0, no_markup: 0, duplicate_barcodes: 0, price_rise: 0, bestsellers: 0 };
   for (const kind of issueKinds) {
     const n = value.counts[kind];
     if (!count(n)) return invalid();
@@ -53,14 +82,20 @@ export function parseCatalogIssues(value: unknown): CatalogIssues {
       || !nullableText(row.cash_code) || (row.unit !== 'pcs' && row.unit !== 'kg') || !nullableText(row.barcode)
       || !(row.barcode_count === null || (count(row.barcode_count) && row.barcode_count >= 2))
       || ((row.barcode === null) !== (row.barcode_count === null))) return invalid();
+    const priceKind = optional(row.price_kind);
+    const changedAt = optional(row.changed_at);
+    if (!(priceKind === null || priceKind === 'retail' || priceKind === 'purchase')
+      || !(changedAt === null || (typeof changedAt === 'string' && !Number.isNaN(Date.parse(changedAt))))) return invalid();
     return {
       id: row.id, name: row.name, cashCode: row.cash_code, unit: row.unit,
       retailPrice: price(row.retail_price), purchasePrice: price(row.purchase_price),
       barcode: row.barcode, barcodeCount: row.barcode_count,
+      priceKind, oldPrice: price(optional(row.old_price)), newPrice: price(optional(row.new_price)), changedAt,
+      qty: quantity(optional(row.qty)), amount: price(optional(row.amount), true),
     };
   });
   if (items.length > value.total) return invalid();
-  return { counts, total: value.total, items };
+  return { counts, total: value.total, items, salesPeriod: salesPeriod(value.sales_period) };
 }
 
 export async function loadCatalogIssues(orgId: string, kind: IssueKind, offset: number, signal: AbortSignal): Promise<CatalogIssues> {

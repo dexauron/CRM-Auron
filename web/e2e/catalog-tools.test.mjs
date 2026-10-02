@@ -22,7 +22,8 @@ const issue = (p, barcode = null) => ({
   retail_price: p.retail_price === null ? null : String(p.retail_price), purchase_price: '10000',
   barcode, barcode_count: barcode ? 2 : null,
 });
-const counts = { missing_price: 52, below_cost: 1, no_markup: 1, duplicate_barcodes: 1 };
+const counts = { missing_price: 52, below_cost: 1, no_markup: 1, duplicate_barcodes: 1, price_rise: 1, bestsellers: 1 };
+const salesPeriod = { from: '2026-09-01', to: '2026-09-30' };
 let browser;
 let server;
 
@@ -87,8 +88,11 @@ async function withPage(options, run) {
       const rows = params.p_kind === 'missing_price' ? products.slice(2).map((p) => issue(p))
         : params.p_kind === 'below_cost' ? [issue(products[0])]
           : params.p_kind === 'no_markup' ? [issue(products[1])]
-            : products.slice(0, 2).map((p) => issue(p, '4600000000011'));
-      return reply({ counts, total: rows.length, items: rows.slice(params.p_offset, params.p_offset + params.p_limit) });
+            : params.p_kind === 'price_rise' ? [{ ...issue(products[0]), price_kind: 'purchase', old_price: '8000', new_price: '10000',
+              changed_at: '2026-10-01T09:00:00+00:00' }]
+              : params.p_kind === 'bestsellers' ? [{ ...issue(products[1]), qty: '3.500', amount: '35000' }]
+                : products.slice(0, 2).map((p) => issue(p, '4600000000011'));
+      return reply({ counts, total: rows.length, sales_period: salesPeriod, items: rows.slice(params.p_offset, params.p_offset + params.p_limit) });
     }
     return reply([]);
   });
@@ -115,6 +119,24 @@ test('КАТ-6: каталог → инструменты → убыток → �
     await page.getByRole('button', { name: 'Ниже закупки', exact: true }).first().click();
     await page.getByRole('heading', { name: 'Ниже закупки', exact: true }).waitFor();
     assert.equal(page.url(), `${base}#catalog/tools/below_cost`);
+  });
+});
+
+test('КАТ-6: отчёты «Подорожало» и «Ходовые товары»', async () => {
+  await withPage({}, async (page) => {
+    await page.goto(`${base}#catalog/tools`);
+    await page.getByRole('heading', { name: 'Отчёты', exact: true }).waitFor();
+    await page.screenshot({ path: 'test-results/catalog-tools/reports-summary.png', fullPage: true });
+    await page.getByRole('button', { name: /^Подорожало/ }).click();
+    await page.getByText('Закупка: 80,00\u00a0₽ → 100,00\u00a0₽ · ценник 99,00\u00a0₽ · 01.10.2026', { exact: true }).waitFor();
+    assert.equal(await page.getByText('+25\u00a0%', { exact: true }).count(), 1);
+    await page.screenshot({ path: 'test-results/catalog-tools/reports-price-rise.png', fullPage: true });
+    await page.getByRole('button', { name: 'Инструменты', exact: true }).first().click();
+    await page.getByRole('button', { name: /^Ходовые товары/ }).click();
+    await page.getByText('Продажи за 01.09.2026 – 30.09.2026 по выручке', { exact: false }).waitFor();
+    await page.getByText('Код 2 · Продано 3,5 шт.', { exact: true }).waitFor();
+    assert.equal(await page.getByText('350,00\u00a0₽', { exact: true }).count(), 1);
+    await page.screenshot({ path: 'test-results/catalog-tools/reports-bestsellers.png', fullPage: true });
   });
 });
 

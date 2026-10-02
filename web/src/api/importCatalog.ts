@@ -92,3 +92,34 @@ export async function importInternals(
   }
   return totals;
 }
+
+/** Продажи товара за период: количество и выручка в копейках (null — в отчёте нет суммы). */
+export interface ImportSale {
+  product_id: string;
+  qty: number;
+  amount: number | null;
+}
+
+/** Отчёт продаж порциями: первая создаёт отчёт на сервере, последняя его завершает — прерванный не попадёт в «Ходовые». */
+export async function importSales(
+  orgId: string,
+  period: { from: string; to: string },
+  rows: ImportSale[],
+  onProgress: (done: number, total: number) => void,
+): Promise<number> {
+  let report: number | null = null;
+  let matched = 0;
+  for (let i = 0; i < rows.length; i += BATCH) {
+    const res = await api().rpc('import_sales', {
+      p_org: orgId, p_report: report, p_from: period.from, p_to: period.to,
+      p_rows: rows.slice(i, i + BATCH), p_done: i + BATCH >= rows.length,
+    });
+    if (res.error) throw new Error(res.error.code === '42501' ? 'forbidden' : 'Не удалось загрузить продажи');
+    const d = (typeof res.data === 'object' && res.data !== null ? res.data : {}) as Record<string, unknown>;
+    if (typeof d.report !== 'number') throw new Error('Не удалось загрузить продажи');
+    report = d.report;
+    matched += num(d.matched);
+    onProgress(Math.min(i + BATCH, rows.length), rows.length);
+  }
+  return matched;
+}

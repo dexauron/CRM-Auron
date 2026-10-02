@@ -4,7 +4,7 @@ import { CatalogToolsError, loadCatalogIssues, parseCatalogIssues } from './cata
 const { rpc, abortSignal } = vi.hoisted(() => ({ rpc: vi.fn(), abortSignal: vi.fn() }));
 vi.mock('./client', () => ({ api: () => ({ rpc }) }));
 const row = { id: 'p1', name: 'Тест', cash_code: '001', unit: 'pcs', retail_price: '9900', purchase_price: '10000', barcode: null, barcode_count: null };
-const report = { counts: { missing_price: 0, below_cost: 1, no_markup: 0, duplicate_barcodes: 0 }, total: 1, items: [row] };
+const report = { counts: { missing_price: 0, below_cost: 1, no_markup: 0, duplicate_barcodes: 0, price_rise: 0, bestsellers: 0 }, total: 1, items: [row] };
 
 describe('КАТ-6: ответ сервера', () => {
   it('разбирает суммы без потери копеек и сохраняет ноль отдельно от отсутствующей цены', () => {
@@ -29,6 +29,35 @@ describe('КАТ-6: ответ сервера', () => {
   });
   it.each([null, {}, { ...report, counts: {} }, { ...report, total: -1 }, { ...report, total: 0 }, { ...report, items: [null] }])('не показывает неполный отчёт как успешный', (value) => {
     expect(() => parseCatalogIssues(value)).toThrow(CatalogToolsError);
+  });
+  it('«Подорожало»: было и стало без потери копеек, вид цены и дата', () => {
+    const p = parseCatalogIssues({ ...report, items: [{ ...row, price_kind: 'purchase', old_price: '8000', new_price: '10000',
+      changed_at: '2026-10-02T12:00:00+00:00', qty: null, amount: null }] }).items[0];
+    expect(p).toMatchObject({ priceKind: 'purchase', oldPrice: 8000n, newPrice: 10000n, changedAt: '2026-10-02T12:00:00+00:00', qty: null });
+  });
+  it('«Ходовые»: количество с долями, выручка и период отчёта', () => {
+    const result = parseCatalogIssues({ ...report, sales_period: { from: '2026-09-01', to: '2026-09-30' },
+      items: [{ ...row, qty: '3.500', amount: '110000' }] });
+    expect(result.salesPeriod).toEqual({ from: '2026-09-01', to: '2026-09-30' });
+    expect(result.items[0]).toMatchObject({ qty: 3.5, amount: 110000n, priceKind: null, oldPrice: null });
+  });
+  it('старый ответ без новых полей читается как null', () => {
+    const result = parseCatalogIssues(report);
+    expect(result.salesPeriod).toBeNull();
+    expect(result.items[0]).toMatchObject({ priceKind: null, changedAt: null, qty: null, amount: null });
+  });
+  it.each([
+    { price_kind: 'other' }, { old_price: '-1' }, { changed_at: 'вчера' }, { qty: 'много' }, { qty: 3 }, { amount: '1.5' },
+  ])('отклоняет неверное поле отчёта %o', (extra) => {
+    expect(() => parseCatalogIssues({ ...report, items: [{ ...row, ...extra }] })).toThrow(CatalogToolsError);
+  });
+  it.each([{ from: '2026-09-30', to: '2026-09-01' }, { from: '01.09.2026', to: '2026-09-30' }, 'сентябрь'])('отклоняет неверный период %o', (period) => {
+    expect(() => parseCatalogIssues({ ...report, sales_period: period })).toThrow(CatalogToolsError);
+  });
+  it('без счётчика нового отчёта ответ неполный', () => {
+    const counts: Record<string, number> = { ...report.counts };
+    delete counts.bestsellers;
+    expect(() => parseCatalogIssues({ ...report, counts })).toThrow(CatalogToolsError);
   });
   it('пустой каталог — корректный пустой результат', () => {
     expect(parseCatalogIssues({ ...report, total: 0, items: [], counts: { ...report.counts, below_cost: 0 } }).items).toEqual([]);

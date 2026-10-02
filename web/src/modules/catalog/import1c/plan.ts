@@ -2,23 +2,29 @@
 // Сопоставление как в старом каталоге: код → штрихкод → название → те же слова в другом порядке.
 // Существующий товар не переименовывается, фото и описание не трогаются; пустое в файле ничего не стирает.
 import type { CatalogProduct } from '../../../api/catalog';
-import type { ImportGroup, ImportInternal, ImportProduct } from '../../../api/importCatalog';
+import type { ImportGroup, ImportInternal, ImportProduct, ImportSale } from '../../../api/importCatalog';
 import type { CatalogGroup } from '../search';
-import { nameKey, norm, normCode, type BarcodeRec, type PriceItem, type RetailRec, type StockRec, type SupplierPrice } from './parse';
+import {
+  nameKey, norm, normCode, type BarcodeRec, type PriceItem, type RetailRec, type SalesPeriod, type SalesRec, type StockRec, type SupplierPrice,
+} from './parse';
 
 export type ParsedReport =
   | { type: 'prices'; items: PriceItem[] }
   | { type: 'barcodes'; recs: BarcodeRec[] }
   | { type: 'stock'; recs: StockRec[] }
-  | { type: 'retail'; recs: RetailRec[] };
+  | { type: 'retail'; recs: RetailRec[] }
+  | { type: 'sales'; recs: SalesRec[]; period: SalesPeriod };
 
-/** Порядок загрузки: сначала товары и цены, потом штрихкоды, остатки и розница (как в старом каталоге). */
-const ORDER: ParsedReport['type'][] = ['prices', 'barcodes', 'stock', 'retail'];
+/** Порядок загрузки: сначала товары и цены, потом штрихкоды, остатки и розница (как в старом каталоге); продажи — последними:
+ *  они только ищут товары и ничего не создают. */
+const ORDER: ParsedReport['type'][] = ['prices', 'barcodes', 'stock', 'retail', 'sales'];
 
 export interface ImportPlan {
   groups: ImportGroup[];
   products: ImportProduct[];
   internals: ImportInternal[];
+  /** Продажи по файлам: у каждого свой период; товары уже найдены в каталоге. */
+  sales: (SalesPeriod & { rows: ImportSale[] })[];
   stats: { created: number; changed: number; unmatched: number; unmatchedNames: string[] };
 }
 
@@ -141,6 +147,7 @@ export function buildImportPlan(
     for (const b of codes) if (/^[0-9A-Za-z-]{1,64}$/.test(b)) d.barcodes.add(b);
   };
   const latest = (a: string | null, b: string | null) => (!a ? b : !b ? a : a > b ? a : b);
+  const sales: ImportPlan['sales'] = [];
 
   const sorted = [...reports].sort((a, b) => ORDER.indexOf(a.type) - ORDER.indexOf(b.type));
   for (const report of sorted) {
@@ -176,6 +183,20 @@ export function buildImportPlan(
         if (rec.retail !== null) d.retail = toKopecks(rec.retail);
         d.stock = rec.stock;
       }
+    } else if (report.type === 'sales') {
+      const rows = new Map<string, ImportSale>();
+      for (const rec of report.recs) {
+        const d = match(rec.code, [], rec.name);
+        if (!d) {
+          unmatched.add(rec.name);
+          continue;
+        }
+        const row = rows.get(d.id) ?? { product_id: d.id, qty: 0, amount: null };
+        row.qty = Math.round((row.qty + rec.qty) * 1000) / 1000;
+        if (rec.amount !== null) row.amount = (row.amount ?? 0) + toKopecks(rec.amount);
+        rows.set(d.id, row);
+      }
+      sales.push({ ...report.period, rows: [...rows.values()] });
     } else {
       for (const rec of report.recs) {
         const d = match(null, [], rec.name)
@@ -220,6 +241,7 @@ export function buildImportPlan(
     groups: newGroups,
     products,
     internals,
+    sales,
     stats: { created, changed, unmatched: unmatched.size, unmatchedNames: [...unmatched].slice(0, 20) },
   };
 }
