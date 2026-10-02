@@ -19,7 +19,7 @@ npm run dev
 ## База
 Изменения схемы — только новые файлы в `supabase/migrations/`.
 ```bash
-npx supabase@2.119.0 start -x gotrue,realtime,storage-api,imgproxy,kong,mailpit,postgrest,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
+npx supabase@2.119.0 start -x gotrue,realtime,imgproxy,kong,mailpit,postgrest,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
 supabase/tests/run.sh
 npx supabase@2.119.0 stop
 ```
@@ -48,7 +48,7 @@ npx supabase@2.119.0 stop
 
 Проверка на своём компьютере (нужен Docker):
 ```bash
-npx supabase@2.119.0 start -x realtime,storage-api,imgproxy,mailpit,postgres-meta,studio,logflare,vector,supavisor
+npx supabase@2.119.0 start -x realtime,imgproxy,mailpit,postgres-meta,studio,logflare,vector,supavisor
 printf '%s\n' 'TELEGRAM_BOT_TOKEN=123456789:TEST-token-for-unit-tests-only' 'ALLOWED_ORIGINS=https://dexauron.github.io' > /tmp/functions.env
 npx supabase@2.119.0 functions serve auth-telegram --env-file /tmp/functions.env &
 eval "$(npx supabase@2.119.0 status -o env | grep -E '^(PUBLISHABLE_KEY|SECRET_KEY)=')"

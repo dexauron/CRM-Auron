@@ -10,8 +10,16 @@ describe('parseProduct', () => {
       }),
     ).toEqual({
       id: 'p1', name: 'Молоко', groupId: 'g1', cashCode: '100500', article: null, barcodes: ['4600000000011'],
-      isWeighted: false, retailPrice: 8900, inStock: true, arrivalOn: '2026-10-01', unit: 'pcs',
+      isWeighted: false, retailPrice: 8900, inStock: true, arrivalOn: '2026-10-01', unit: 'pcs', photos: [],
     });
+  });
+
+  it('КАТ-7: фото по порядку, битые записи пропускаются', () => {
+    const p = parseProduct({
+      id: 'p', name: 'X',
+      product_photos: [{ path: 'b.jpg', sort: 1 }, { path: 'a.jpg', sort: 0 }, { sort: 2 }, { path: 'c.jpg', sort: 1 }],
+    });
+    expect(p?.photos).toEqual(['a.jpg', 'b.jpg', 'c.jpg']);
   });
 
   it('КАТ-4: лишние поля из ответа не попадают в товар', () => {

@@ -302,6 +302,10 @@ select {
   --inset: 60px;
 }
 
+.row-inset-thumb {
+  --inset: 72px;
+}
+
 .row-button {
   cursor: pointer;
   transition: background-color 0.15s ease;
@@ -691,6 +695,56 @@ a.row {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* ── Фото товаров ──────────────────────────────────────────── */
+/* Снимки товаров обычно на белом фоне: показываем их целиком на белой подложке в обеих темах. */
+
+.thumb {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  background: #fff;
+  object-fit: contain;
+}
+
+.thumb-empty {
+  background: var(--fill);
+  color: var(--muted);
+}
+
+.thumb-empty .icon {
+  width: 22px;
+  height: 22px;
+  opacity: 0.6;
+}
+
+.gallery {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 20px;
+  overflow-x: auto;
+  border-radius: var(--radius);
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+}
+
+.gallery::-webkit-scrollbar {
+  display: none;
+}
+
+.gallery-photo {
+  flex: 0 0 100%;
+  width: 100%;
+  height: min(calc(100vw - 32px), 420px);
+  border-radius: var(--radius);
+  background: #fff;
+  object-fit: contain;
+  scroll-snap-align: center;
 }
 
 /* ── Сканер штрихкода ──────────────────────────────────────── */

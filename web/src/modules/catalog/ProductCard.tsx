@@ -12,6 +12,7 @@ import { formatDate, formatDay } from '../../shared/date';
 import { ru } from '../../shared/i18n/ru';
 import { Row, Section } from '../../shared/ui/List';
 import { formatPrice, formatStock, markupPercent } from './format';
+import { PhotoEditor, PhotoGallery } from './ProductPhotos';
 import type { CatalogGroup } from './search';
 
 type Internal =
@@ -105,15 +106,19 @@ interface Props {
   group: CatalogGroup | null;
   /** Показывать закупку и остаток: человек — владелец, управляющий или бухгалтер этого магазина со вторым фактором. */
   privileged: boolean;
+  /** Магазин товара, если человек может править фото (владелец, управляющий со вторым фактором); иначе null. */
+  editOrgId: string | null;
   onOpenGroup: (id: string) => void;
+  onPhotosChange: (photos: string[]) => void;
 }
 
-export function ProductCard({ product, group, privileged, onOpenGroup }: Props) {
+export function ProductCard({ product, group, privileged, editOrgId, onOpenGroup, onPhotosChange }: Props) {
   const t = ru.catalog.card;
   const stock = product.inStock === true ? ru.catalog.inStock : product.inStock === false ? ru.catalog.outOfStock : null;
   const unit = ru.catalog.units[product.unit] + (product.isWeighted ? `, ${t.weighted}` : '');
   return (
     <main>
+      <PhotoGallery photos={product.photos} name={product.name} />
       <Section footer={t.priceFooter}>
         <div className="product-hero">
           <span className="product-price">{formatPrice(product.retailPrice, product.unit)}</span>
@@ -143,6 +148,10 @@ export function ProductCard({ product, group, privileged, onOpenGroup }: Props) 
             <Row key={code} title={<span className="code">{code}</span>} />
           ))}
         </Section>
+      )}
+
+      {editOrgId && (
+        <PhotoEditor orgId={editOrgId} productId={product.id} photos={product.photos} onChange={onPhotosChange} />
       )}
 
       {privileged && <InternalSections product={product} />}

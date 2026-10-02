@@ -13,6 +13,8 @@ export interface CatalogProduct extends CatalogItem {
   inStock: boolean | null;
   arrivalOn: string | null;
   unit: 'pcs' | 'kg';
+  /** Пути фото в Storage по порядку; адрес — photoUrl из api/photos. */
+  photos: string[];
 }
 
 const PAGE = 1000;
@@ -23,6 +25,12 @@ export function parseProduct(row: unknown): CatalogProduct | null {
   if (!isRecord(row) || typeof row.id !== 'string' || typeof row.name !== 'string') return null;
   const barcodes = Array.isArray(row.product_barcodes)
     ? (row.product_barcodes as unknown[]).flatMap((b) => (isRecord(b) && typeof b.barcode === 'string' ? [b.barcode] : []))
+    : [];
+  const photos = Array.isArray(row.product_photos)
+    ? (row.product_photos as unknown[])
+        .flatMap((f) => (isRecord(f) && typeof f.path === 'string' ? [{ path: f.path, sort: typeof f.sort === 'number' ? f.sort : 0 }] : []))
+        .sort((a, b) => a.sort - b.sort || a.path.localeCompare(b.path))
+        .map((f) => f.path)
     : [];
   return {
     id: row.id,
@@ -36,6 +44,7 @@ export function parseProduct(row: unknown): CatalogProduct | null {
     inStock: typeof row.in_stock === 'boolean' ? row.in_stock : null,
     arrivalOn: str(row.arrival_on),
     unit: row.unit === 'kg' ? 'kg' : 'pcs',
+    photos,
   };
 }
 
@@ -64,7 +73,9 @@ export async function loadCatalog(orgId: string): Promise<{ groups: CatalogGroup
       pages.slice(i, i + 4).map(async (page) => {
         const res = await api()
           .from('products')
-          .select('id, group_id, name, cash_code, article, unit, is_weighted, retail_price, in_stock, arrival_on, product_barcodes(barcode)')
+          .select(
+            'id, group_id, name, cash_code, article, unit, is_weighted, retail_price, in_stock, arrival_on, product_barcodes(barcode), product_photos(path, sort)',
+          )
           .eq('org_id', orgId)
           .eq('active', true)
           .order('id')

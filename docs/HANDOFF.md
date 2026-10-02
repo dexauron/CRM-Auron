@@ -1,6 +1,6 @@
 # Передача проекта следующему исполнителю (ChatGPT / Codex или другой ИИ)
 
-Обновлено: 2026-10-02 (каталог на устройстве и без сети), Claude. Этот файл — точка входа: прочитай его целиком, потом файлы из раздела 2.
+Обновлено: 2026-10-02 (каталог: фото товаров), Claude. Этот файл — точка входа: прочитай его целиком, потом файлы из раздела 2.
 Работа продолжается в этом же репозитории `dexauron/CRM-Auron`. Начинай с раздела 8 «Что делать дальше».
 
 ---
@@ -64,7 +64,7 @@ web/src/modules/common/ учётная запись, вход, второй фа
 web/src/modules/staff/  экран «Команда»: приглашения, участники
 web/src/modules/catalog/ каталог: поиск (search.ts), экран, карточка (ProductCard.tsx), перенос старого каталога
 web/src/shared/         ui (дизайн iOS), i18n, деньги, телефоны, даты, Telegram
-supabase/migrations/    core → core_fk_indexes → team → second_factor → catalog → catalog_import → catalog_version
+supabase/migrations/    core → … → catalog → catalog_import → catalog_version → product_photos
 supabase/functions/     auth-telegram + _shared/telegram-init-data.ts
 supabase/tests/         run.sh, *_test.sql (права), auth_telegram_e2e.mjs (сквозной вход)
 ```
@@ -87,6 +87,7 @@ supabase/tests/         run.sh, *_test.sql (права), auth_telegram_e2e.mjs (
 | #13 | Каталог: карточка товара; закупка, наценка, остаток, история цен — только своим ролям | 14 сценариев в Chromium |
 | #14 | Каталог: сканер штрихкода (BarcodeDetector, иначе zxing-wasm), GTIN из «Честного знака» | 4 теста, 11 сценариев с поддельной камерой |
 | #15 | Каталог на устройстве (IndexedDB) и без сети; версия `catalog_version` вместо скачивания при каждом входе | 7 тестов базы, 11 сценариев в Chromium |
+| #16 | Каталог: фото товаров (Storage, EXIF удаляется на телефоне, миниатюры) | 14 тестов прав, 10 сценариев в Chromium |
 
 Не сливать: **PR #2** (Dependabot, TypeScript 7) — typescript-eslint пока поддерживает TypeScript до 6.0.
 
@@ -95,8 +96,8 @@ supabase/tests/         run.sh, *_test.sql (права), auth_telegram_e2e.mjs (
 - Бот: **@auron_core_bot**; кнопка меню и Mini App ведут на сайт; ссылки-приглашения
   `https://t.me/auron_core_bot?startapp=inv_<токен>`.
 - Supabase: тестовый проект **CRM-Auron-Test** (Франкфурт) — **только для вымышленных данных**.
-  Применены миграции core, core_fk_indexes, team, second_factor, catalog, catalog_import, catalog_version
-  (проверяй `list_migrations`).
+  Применены миграции core, core_fk_indexes, team, second_factor, catalog, catalog_import, catalog_version,
+  product_photos (проверяй `list_migrations`). Корзина Storage `product-photos` создана миграцией.
   Функция `auth-telegram` выложена с `verify_jwt = false`. Открытая регистрация выключена владельцем.
   Владелец вошёл и назначен владельцем магазина «Way Market».
 - Переменные репозитория (не секреты): `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`.
@@ -158,8 +159,12 @@ supabase/tests/         run.sh, *_test.sql (права), auth_telegram_e2e.mjs (
   подключения второго фактора). Проверь числом: `select count(*) from products` = 18 945.
 - Дальше: выгрузки 1С (КАТ-5, часть 2: перенос разборщиков из старого `imports.js` — цены поставщиков,
   штрихкоды, остатки, продажи; библиотека чтения Excel по правилам открытого кода в `docs/DECISIONS.md`;
-  нужны образцы файлов от владельца, с вымышленными данными в тестах); затем
-  фото (КАТ-7, Supabase Storage), инструменты (КАТ-6: сторож наценки, дубли штрихкодов, «подорожало»).
+  нужны образцы файлов от владельца, с вымышленными данными в тестах); затем перенос фото старого каталога,
+  инструменты (КАТ-6: сторож наценки, дубли штрихкодов, «подорожало»).
+- Фото (КАТ-7) — сделаны: `api/photos.ts`, `shared/image.ts`, `modules/catalog/ProductPhotos.tsx`. Осталось:
+  перенос ~4 тыс. фото старого каталога (поле `photos` в `catalog/data/p/*.json`, лежат на старом сервере
+  владельца). Делать серверной функцией (Edge Function): скачать, убрать EXIF, положить в Storage. Адрес
+  старого сервера в репозиторий и CSP не писать — он приходит из данных старого каталога.
 - Офлайн (КАТ-8) — сделан: `shared/offline.ts` (IndexedDB), `modules/catalog/catalogCache.ts`, RPC
   `catalog_version`. Новые данные, которые нужны без сети, кладутся так же; личные данные на устройство не класть.
 
