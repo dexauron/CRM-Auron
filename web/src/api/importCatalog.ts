@@ -61,3 +61,34 @@ export async function importCatalog(
   }
   return totals;
 }
+
+/** Закупка и остаток товара (копейки, количество). Пишет только владелец со вторым фактором. */
+export interface ImportInternal {
+  product_id: string;
+  purchase_price: number | null;
+  stock: number | null;
+}
+
+export interface InternalsTotals {
+  matched: number;
+  changed: number;
+  skipped: number;
+}
+
+export async function importInternals(
+  orgId: string,
+  rows: ImportInternal[],
+  onProgress: (done: number, total: number) => void,
+): Promise<InternalsTotals> {
+  const totals: InternalsTotals = { matched: 0, changed: 0, skipped: 0 };
+  for (let i = 0; i < rows.length; i += BATCH) {
+    const res = await api().rpc('import_internals', { p_org: orgId, p_rows: rows.slice(i, i + BATCH) });
+    if (res.error) throw new Error(res.error.code === '42501' ? 'forbidden' : 'Не удалось загрузить закупку и остатки');
+    const d = (typeof res.data === 'object' && res.data !== null ? res.data : {}) as Record<string, unknown>;
+    totals.matched += num(d.matched);
+    totals.changed += num(d.changed);
+    totals.skipped += num(d.skipped);
+    onProgress(Math.min(i + BATCH, rows.length), rows.length);
+  }
+  return totals;
+}

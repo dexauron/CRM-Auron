@@ -155,6 +155,38 @@ export const ru = {
         `штрихкодов ${t.barcodes.toLocaleString('ru-RU')}` + (t.skipped ? `, пропущено ${t.skipped}` : ''),
       error: 'Перенос прервался. Нажмите, чтобы повторить: уже перенесённое не задвоится.',
       footer: 'Названия, коды, штрихкоды, группы, цены на полке и наличие из старого каталога. Повторный перенос обновит, а не задвоит.',
+      oneCTitle: 'Выгрузки 1С',
+      oneC: 'Загрузить файлы из 1С',
+      oneCReading: 'Читаю файлы…',
+      oneCWait: 'Каталог обновляется — пару секунд',
+      oneCTypes: {
+        prices: 'Цены поставщиков',
+        barcodes: 'Штрихкоды',
+        stock: 'Остатки',
+        retail: 'Прайс-лист',
+        sales: 'Продажи — загрузятся вместе с «Ходовыми товарами»',
+        contacts: 'Контакты поставщиков — на этапе «Поставщики»',
+        units: 'Единицы измерения — пока не нужны',
+        photo: 'Фото по ссылкам — пока не загружаются',
+        stale: 'Неликвидные товары — пока не загружаются',
+      },
+      oneCUnknown: 'Не узнал отчёт. Нужны: цены поставщиков, штрихкоды, остатки, прайс-лист',
+      oneCRows: (n: number) => `строк: ${n.toLocaleString('ru-RU')}`,
+      oneCPlan: (created: number, changed: number) =>
+        `Новых товаров: ${created.toLocaleString('ru-RU')} · изменится: ${changed.toLocaleString('ru-RU')}`,
+      oneCInternals: (n: number) => `Закупка и остатки: ${n.toLocaleString('ru-RU')} товаров`,
+      oneCOwnerOnly: 'Закупку и остатки загружает только владелец — их в этот раз пропущу',
+      oneCUnmatched: (n: number) => `Не нашлись в каталоге: ${n.toLocaleString('ru-RU')} (штрихкоды и розница к ним не загрузятся)`,
+      oneCNothing: 'В файлах нет изменений для каталога',
+      oneCConfirm: 'Загрузить',
+      oneCProgressProducts: (done: number, total: number) =>
+        `Товары: ${done.toLocaleString('ru-RU')} из ${total.toLocaleString('ru-RU')}`,
+      oneCProgressInternals: (done: number, total: number) =>
+        `Закупка и остатки: ${done.toLocaleString('ru-RU')} из ${total.toLocaleString('ru-RU')}`,
+      oneCDone: (created: number, changed: number, internals: number) =>
+        `Готово: новых ${created.toLocaleString('ru-RU')}, обновлено ${changed.toLocaleString('ru-RU')}` +
+        (internals ? `, закупка и остатки — ${internals.toLocaleString('ru-RU')}` : ''),
+      oneCFooter: 'Файлы Excel из 1С (.xlsx, .xls): цены поставщиков, штрихкоды, остатки, прайс-лист — можно сразу несколько. Тип отчёта узнаётся сам. Товары находятся по коду, штрихкоду и названию; повторная загрузка не задваивает.',
       photos: 'Перенести фото из старого каталога',
       photosPlanning: 'Смотрю, каких фото не хватает…',
       photosConfirm: (n: number) => `Перенести ${n.toLocaleString('ru-RU')} фото? Займёт несколько минут — не закрывайте экран`,

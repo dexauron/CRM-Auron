@@ -145,6 +145,7 @@ export function App() {
         <CatalogScreen
           editableOrgIds={orgsWithRole(['owner', 'manager'])}
           privilegedOrgIds={orgsWithRole(['owner', 'manager', 'accountant'])}
+          ownerOrgIds={orgsWithRole(['owner'])}
           groupId={screen.groupId}
           productId={screen.productId}
           tools={screen.tools}
