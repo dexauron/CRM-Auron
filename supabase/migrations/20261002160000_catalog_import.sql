@@ -10,6 +10,7 @@ declare
   v_updated int := 0;
   v_barcodes int := 0;
   v_skipped int := 0;
+  v_valid int := 0;
 begin
   if not private.has_role(p_org, array['owner', 'manager']::public.app_role[]) then
     raise exception 'Нет прав' using errcode = '42501';
@@ -35,36 +36,33 @@ begin
   )
   select count(*) into v_groups from up;
 
-  drop table if exists pg_temp.import_rows;
-  create temporary table import_rows on commit drop as
-  select
-    x.id as given_id,
-    nullif(btrim(x.cash_code), '') as cash_code,
-    btrim(x.name) as name,
-    (select pg.id from public.product_groups pg where pg.id = x.group_id and pg.org_id = p_org) as group_id,
-    case when x.unit = 'kg' then 'kg' else 'pcs' end::public.product_unit as unit,
-    coalesce(x.is_weighted, false) as is_weighted,
-    case when x.retail_price >= 0 then x.retail_price end as retail_price,
-    x.in_stock,
-    x.arrival_on,
-    coalesce(x.barcodes, '{}') as barcodes,
-    null::uuid as product_id
-  from jsonb_to_recordset(p_products) as x(
-    id uuid, cash_code text, name text, group_id uuid, unit text, is_weighted boolean,
-    retail_price bigint, in_stock boolean, arrival_on date, barcodes text[]
-  );
-
-  delete from pg_temp.import_rows where name is null or length(name) not between 1 and 300 or length(cash_code) > 64;
-  get diagnostics v_skipped = row_count;
-
+  -- Товары и штрихкоды — одним запросом: временная таблица не нужна, всё в одной транзакции.
+  with src as materialized (
+    select
+      nullif(btrim(x.cash_code), '') as cash_code,
+      btrim(x.name) as name,
+      (select pg.id from public.product_groups pg where pg.id = x.group_id and pg.org_id = p_org) as group_id,
+      case when x.unit = 'kg' then 'kg' else 'pcs' end::public.product_unit as unit,
+      coalesce(x.is_weighted, false) as is_weighted,
+      case when x.retail_price >= 0 then x.retail_price end as retail_price,
+      x.in_stock,
+      x.arrival_on,
+      coalesce(x.barcodes, '{}') as barcodes,
+      coalesce(x.id, gen_random_uuid()) as new_id
+    from jsonb_to_recordset(p_products) as x(
+      id uuid, cash_code text, name text, group_id uuid, unit text, is_weighted boolean,
+      retail_price bigint, in_stock boolean, arrival_on date, barcodes text[]
+    )
+    where length(btrim(coalesce(x.name, ''))) between 1 and 300
+      and coalesce(length(nullif(btrim(x.cash_code), '')), 0) <= 64
+  ),
   -- С кодом кассы: обновляем по коду. Новый товар получает переданный id, если тот свободен.
-  with up as (
+  coded as (
     insert into public.products (id, org_id, group_id, name, cash_code, unit, is_weighted, retail_price, in_stock, arrival_on)
     select
-      case when r.given_id is null or exists (select 1 from public.products p where p.id = r.given_id)
-        then gen_random_uuid() else r.given_id end,
+      case when exists (select 1 from public.products p where p.id = r.new_id) then gen_random_uuid() else r.new_id end,
       p_org, r.group_id, r.name, r.cash_code, r.unit, r.is_weighted, r.retail_price, r.in_stock, r.arrival_on
-    from (select distinct on (cash_code) * from pg_temp.import_rows where cash_code is not null) r
+    from (select distinct on (cash_code) * from src where cash_code is not null) r
     on conflict (org_id, cash_code) do update set
       name = excluded.name,
       group_id = coalesce(excluded.group_id, public.products.group_id),
@@ -74,52 +72,46 @@ begin
       in_stock = coalesce(excluded.in_stock, public.products.in_stock),
       arrival_on = coalesce(excluded.arrival_on, public.products.arrival_on),
       active = true
-    returning (xmax = 0) as inserted
-  )
-  select count(*) filter (where inserted), count(*) filter (where not inserted) into v_inserted, v_updated from up;
-
-  update pg_temp.import_rows r set product_id = p.id
-  from public.products p where p.org_id = p_org and p.cash_code = r.cash_code and r.cash_code is not null;
-
-  -- Без кода кассы: по id; чужой товар с тем же id не меняем.
-  declare
-    v_i int;
-    v_u int;
-  begin
-    with up as (
-      insert into public.products (id, org_id, group_id, name, unit, is_weighted, retail_price, in_stock, arrival_on)
-      select coalesce(r.given_id, gen_random_uuid()), p_org, r.group_id, r.name, r.unit, r.is_weighted, r.retail_price, r.in_stock, r.arrival_on
-      from pg_temp.import_rows r where r.cash_code is null
-      on conflict (id) do update set
-        name = excluded.name,
-        group_id = coalesce(excluded.group_id, public.products.group_id),
-        unit = excluded.unit,
-        is_weighted = excluded.is_weighted,
-        retail_price = coalesce(excluded.retail_price, public.products.retail_price),
-        in_stock = coalesce(excluded.in_stock, public.products.in_stock),
-        arrival_on = coalesce(excluded.arrival_on, public.products.arrival_on),
-        active = true
-      where public.products.org_id = p_org
-      returning (xmax = 0) as inserted
-    )
-    select count(*) filter (where inserted), count(*) filter (where not inserted) into v_i, v_u from up;
-    v_inserted := v_inserted + v_i;
-    v_updated := v_updated + v_u;
-  end;
-
-  update pg_temp.import_rows r set product_id = r.given_id
-  where r.cash_code is null and exists (select 1 from public.products p where p.id = r.given_id and p.org_id = p_org);
-
+    returning id, cash_code, (xmax = 0) as inserted
+  ),
+  -- Без кода кассы: по id; чужой товар с тем же id не меняем (и его штрихкоды не трогаем).
+  plain as (
+    insert into public.products (id, org_id, group_id, name, unit, is_weighted, retail_price, in_stock, arrival_on)
+    select distinct on (r.new_id) r.new_id, p_org, r.group_id, r.name, r.unit, r.is_weighted, r.retail_price, r.in_stock, r.arrival_on
+    from src r where r.cash_code is null
+    on conflict (id) do update set
+      name = excluded.name,
+      group_id = coalesce(excluded.group_id, public.products.group_id),
+      unit = excluded.unit,
+      is_weighted = excluded.is_weighted,
+      retail_price = coalesce(excluded.retail_price, public.products.retail_price),
+      in_stock = coalesce(excluded.in_stock, public.products.in_stock),
+      arrival_on = coalesce(excluded.arrival_on, public.products.arrival_on),
+      active = true
+    where public.products.org_id = p_org
+    returning id, (xmax = 0) as inserted
+  ),
+  links as (
+    select c.id as product_id, r.barcodes from src r join coded c on c.cash_code = r.cash_code
+    union all
+    select p.id, r.barcodes from src r join plain p on p.id = r.new_id where r.cash_code is null
+  ),
   -- Штрихкоды только добавляются: удалить устаревший — отдельным действием, не импортом.
-  with b as (
+  bc as (
     insert into public.product_barcodes (product_id, org_id, barcode)
-    select distinct r.product_id, p_org, btrim(code)
-    from pg_temp.import_rows r, unnest(r.barcodes) as code
-    where r.product_id is not null and btrim(code) ~ '^[0-9A-Za-z-]{1,64}$'
+    select distinct l.product_id, p_org, btrim(code)
+    from links l, unnest(l.barcodes) as code
+    where btrim(code) ~ '^[0-9A-Za-z-]{1,64}$'
     on conflict do nothing
     returning 1
   )
-  select count(*) into v_barcodes from b;
+  select
+    (select count(*) from src),
+    (select count(*) filter (where inserted) from coded) + (select count(*) filter (where inserted) from plain),
+    (select count(*) filter (where not inserted) from coded) + (select count(*) filter (where not inserted) from plain),
+    (select count(*) from bc)
+  into v_valid, v_inserted, v_updated, v_barcodes;
+  v_skipped := jsonb_array_length(p_products) - v_valid;
 
   return jsonb_build_object('groups', v_groups, 'inserted', v_inserted, 'updated', v_updated,
     'barcodes', v_barcodes, 'skipped', v_skipped);
