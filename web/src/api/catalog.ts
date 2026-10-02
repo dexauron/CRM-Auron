@@ -80,3 +80,47 @@ export async function loadCatalog(orgId: string): Promise<{ groups: CatalogGroup
   }
   return { groups, products };
 }
+
+export interface ProductInternals {
+  purchasePrice: number | null;
+  stock: number | null;
+  note: string | null;
+}
+
+export interface PriceChange {
+  kind: 'retail' | 'purchase';
+  price: number | null;
+  changedAt: string;
+}
+
+const kopecks = (value: unknown) => (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null);
+
+/** Закупка, остаток, примечание. Сервер отдаёт их только владельцу, управляющему и бухгалтеру со вторым фактором. */
+export async function loadProductInternals(productId: string): Promise<ProductInternals | null> {
+  const { data, error } = await api()
+    .from('product_internals')
+    .select('purchase_price, stock, note')
+    .eq('product_id', productId)
+    .maybeSingle();
+  if (error) throw new Error('Не удалось загрузить закрытые сведения');
+  if (!isRecord(data)) return null;
+  const stock = typeof data.stock === 'number' ? data.stock : typeof data.stock === 'string' ? Number(data.stock) : NaN;
+  return { purchasePrice: kopecks(data.purchase_price), stock: Number.isFinite(stock) ? stock : null, note: str(data.note) };
+}
+
+/** Последние изменения цен товара (новые сверху). Видят те же роли, что и закупку. */
+export async function loadPriceHistory(productId: string, limit = 20): Promise<PriceChange[]> {
+  const { data, error } = await api()
+    .from('price_history')
+    .select('kind, price, changed_at')
+    .eq('product_id', productId)
+    .order('changed_at', { ascending: false })
+    .order('id', { ascending: false })
+    .limit(limit);
+  if (error) throw new Error('Не удалось загрузить историю цен');
+  return (data as unknown[]).flatMap((row) =>
+    isRecord(row) && (row.kind === 'retail' || row.kind === 'purchase') && typeof row.changed_at === 'string'
+      ? [{ kind: row.kind, price: kopecks(row.price), changedAt: row.changed_at }]
+      : [],
+  );
+}

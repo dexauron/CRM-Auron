@@ -41,13 +41,16 @@ interface RowProps {
   disabled?: boolean;
   /** Отступ разделителя: у строк со значком или аватаром он начинается после него. */
   inset?: 'text' | 'icon' | 'avatar';
+  /** «Название — значение» (как в «Настройках» → «Об этом устройстве»): длинное значение сокращается многоточием. */
+  fact?: boolean;
 }
 
-export function Row({ title, subtitle, leading, trailing, chevron, tone = 'default', center, onClick, disabled, inset }: RowProps) {
+export function Row({ title, subtitle, leading, trailing, chevron, tone = 'default', center, onClick, disabled, inset, fact }: RowProps) {
   const className = [
     'row',
     `row-inset-${inset ?? (leading ? 'icon' : 'text')}`,
     center ? 'row-center' : '',
+    fact ? 'row-fact' : '',
     tone !== 'default' ? `tone-${tone}` : '',
   ]
     .filter(Boolean)

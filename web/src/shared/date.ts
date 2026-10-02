@@ -12,3 +12,23 @@ export function formatShortDateTime(iso: string): string {
   const date = new Date(iso);
   return Number.isNaN(date.getTime()) ? '—' : shortDateTime.format(date);
 }
+
+const dayLong = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+const dayShort = new Intl.DateTimeFormat('ru-RU', {
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+  timeZone: 'Europe/Moscow',
+});
+
+/** Дата без времени «2026-10-02» → «2 октября 2026 г.» (без сдвига по часовому поясу). */
+export function formatDay(isoDate: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate);
+  return m ? dayLong.format(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]))) : '—';
+}
+
+/** Момент времени → «02.10.2026» по времени магазина. */
+export function formatDate(iso: string): string {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? '—' : dayShort.format(date);
+}

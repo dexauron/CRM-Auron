@@ -1,14 +1,15 @@
-// Каталог (КАТ-1, КАТ-2, КАТ-4): поиск как в iOS, группы, товары с ценой и наличием. Открыт и гостю.
+// Каталог (КАТ-1, КАТ-2, КАТ-4): поиск как в iOS, группы, товары с ценой и наличием, карточка товара. Открыт и гостю.
 import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { loadCatalog, loadStore, type CatalogProduct, type Store } from '../../api/catalog';
 import { importCatalog, type ImportTotals } from '../../api/importCatalog';
 import { STORE_SLUG } from '../../shared/config';
 import { ru } from '../../shared/i18n/ru';
-import { formatRub } from '../../shared/money';
 import { Icon } from '../../shared/ui/icons';
 import { LargeTitle } from '../../shared/ui/LargeTitle';
 import { Row, Section } from '../../shared/ui/List';
+import { formatPrice } from './format';
 import { fetchOldCatalog } from './oldCatalog';
+import { ProductCard } from './ProductCard';
 import { CatalogSearch, type CatalogGroup } from './search';
 
 type Load =
@@ -75,16 +76,16 @@ function ImportSection({ storeId, onImported }: { storeId: string; onImported: (
 const PAGE = 50;
 const collator = new Intl.Collator('ru');
 
-function ProductRow({ product }: { product: CatalogProduct }) {
+function ProductRow({ product, onOpen }: { product: CatalogProduct; onOpen: (id: string) => void }) {
   const stock = product.inStock === true ? ru.catalog.inStock : product.inStock === false ? ru.catalog.outOfStock : null;
   const details = [product.cashCode && ru.catalog.code(product.cashCode), stock].filter(Boolean).join(' · ');
-  const price = product.retailPrice === null ? '—' : formatRub(product.retailPrice) + (product.unit === 'kg' ? ru.catalog.perKg : '');
   return (
     <Row
       title={product.name}
       subtitle={details || undefined}
       tone={product.inStock === false ? 'muted' : 'default'}
-      trailing={<span className="price">{price}</span>}
+      trailing={<span className="price">{formatPrice(product.retailPrice, product.unit)}</span>}
+      onClick={() => onOpen(product.id)}
     />
   );
 }
@@ -92,14 +93,19 @@ function ProductRow({ product }: { product: CatalogProduct }) {
 interface Props {
   /** Открытая группа (из адреса) или null — список групп. */
   groupId: string | null;
+  /** Открытая карточка товара (из адреса) или null. */
+  productId: string | null;
   onOpenGroup: (id: string) => void;
-  /** Шаг назад: из группы — к группам, из каталога — на главную. */
+  onOpenProduct: (id: string) => void;
+  /** Шаг назад: из карточки — к списку, из группы — к группам, из каталога — на главную. */
   onBack: () => void;
   /** Магазины, где человек может менять каталог (владелец, управляющий со вторым фактором). */
   editableOrgIds: readonly string[];
+  /** Магазины, где человек видит закупку и остаток (владелец, управляющий, бухгалтер со вторым фактором). */
+  privilegedOrgIds: readonly string[];
 }
 
-export function CatalogScreen({ groupId, onOpenGroup, onBack, editableOrgIds }: Props) {
+export function CatalogScreen({ groupId, productId, onOpenGroup, onOpenProduct, onBack, editableOrgIds, privilegedOrgIds }: Props) {
   const [reload, setReload] = useState(0);
   const [load, setLoad] = useState<Load>({ kind: 'loading' });
   const [query, setQuery] = useState('');
@@ -123,6 +129,7 @@ export function CatalogScreen({ groupId, onOpenGroup, onBack, editableOrgIds }: 
 
   const ready = load.kind === 'ready' ? load : null;
   const engine = useMemo(() => (ready ? new CatalogSearch(ready.products, ready.groups) : null), [ready]);
+  const byId = useMemo(() => new Map((ready?.products ?? []).map((p) => [p.id, p])), [ready]);
   const counts = useMemo(() => {
     const map = new Map<string, number>();
     for (const p of ready?.products ?? []) if (p.groupId) map.set(p.groupId, (map.get(p.groupId) ?? 0) + 1);
@@ -140,6 +147,47 @@ export function CatalogScreen({ groupId, onOpenGroup, onBack, editableOrgIds }: 
   const group = ready?.groups.find((g) => g.id === groupId) ?? null;
   const back = { label: group ? ru.catalog.title : ru.appName, onClick: onBack };
   const showGroups = ready && !query.trim() && !groupId;
+
+  if (productId) {
+    const product = byId.get(productId) ?? null;
+    const productGroup = product?.groupId ? (ready?.groups.find((g) => g.id === product.groupId) ?? null) : null;
+    return (
+      <>
+        <LargeTitle
+          title={product?.name ?? ru.catalog.title}
+          back={{ label: group && !query.trim() ? group.name : ru.catalog.title, onClick: onBack }}
+        />
+        {load.kind === 'loading' && (
+          <Section>
+            <Row leading={<span className="spinner" />} title={ru.catalog.card.loading} tone="muted" />
+          </Section>
+        )}
+        {load.kind === 'error' && (
+          <p className="notice tone-bad" role="alert">
+            <Icon name="warning" />
+            {ru.catalog.error}
+          </p>
+        )}
+        {(load.kind === 'missing' || (ready && !product)) && (
+          <Section>
+            <Row title={ru.catalog.card.notFound} tone="muted" />
+          </Section>
+        )}
+        {ready && product && (
+          <ProductCard
+            product={product}
+            group={productGroup}
+            privileged={privilegedOrgIds.includes(ready.store.id)}
+            onOpenGroup={(id) => {
+              setQuery('');
+              setLimit(PAGE);
+              onOpenGroup(id);
+            }}
+          />
+        )}
+      </>
+    );
+  }
 
   return (
     <>
@@ -207,7 +255,7 @@ export function CatalogScreen({ groupId, onOpenGroup, onBack, editableOrgIds }: 
             {results.length === 0 ? (
               <Row title={ru.catalog.nothing} tone="muted" />
             ) : (
-              results.slice(0, limit).map((p) => <ProductRow key={p.id} product={p} />)
+              results.slice(0, limit).map((p) => <ProductRow key={p.id} product={p} onOpen={onOpenProduct} />)
             )}
             {results.length > limit && (
               <Row
