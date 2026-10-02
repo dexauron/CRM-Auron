@@ -8,7 +8,7 @@ declare
   missing_id uuid := gen_random_uuid(); zero_id uuid := gen_random_uuid(); loss_id uuid := gen_random_uuid();
   equal_id uuid := gen_random_uuid(); good_id uuid := gen_random_uuid(); unknown_id uuid := gen_random_uuid();
   inactive_id uuid := gen_random_uuid(); other_id uuid := gen_random_uuid(); large_id uuid := gen_random_uuid();
-  user_id uuid; result jsonb; page_one jsonb; args record; denied boolean; before_count bigint; after_count bigint;
+  viewer uuid; result jsonb; page_one jsonb; args record; denied boolean; before_count bigint; after_count bigint;
   report text[] := '{}'; checks boolean[] := '{}'; labels text[] := '{}'; idx integer;
 begin
   insert into auth.users (id, instance_id, aud, role, email, created_at, updated_at)
@@ -45,21 +45,21 @@ begin
   checks := checks || denied; labels := labels || 'guest RPC denied'::text;
 
   perform set_config('role', 'authenticated', true);
-  foreach user_id in array array[staff_id, supplier_id, customer_id, outsider_id] loop
-    perform set_config('request.jwt.claims', jsonb_build_object('sub', user_id, 'role', 'authenticated', 'aal', 'aal2',
+  foreach viewer in array array[staff_id, supplier_id, customer_id, outsider_id] loop
+    perform set_config('request.jwt.claims', jsonb_build_object('sub', viewer, 'role', 'authenticated', 'aal', 'aal2',
       'user_metadata', jsonb_build_object('role', 'owner'))::text, true);
     denied := false;
     begin perform public.catalog_issues(org_a); exception when insufficient_privilege then denied := true; end;
     checks := checks || denied; labels := labels || 'staff/supplier/customer/other owner denied despite fake metadata'::text;
   end loop;
 
-  foreach user_id in array array[owner_id, manager_id, accountant_id] loop
-    perform set_config('request.jwt.claims', jsonb_build_object('sub', user_id, 'role', 'authenticated', 'aal', 'aal1')::text, true);
+  foreach viewer in array array[owner_id, manager_id, accountant_id] loop
+    perform set_config('request.jwt.claims', jsonb_build_object('sub', viewer, 'role', 'authenticated', 'aal', 'aal1')::text, true);
     denied := false;
     begin perform public.catalog_issues(org_a); exception when insufficient_privilege then denied := true; end;
     checks := checks || denied; labels := labels || 'privileged role without TOTP denied'::text;
 
-    perform set_config('request.jwt.claims', jsonb_build_object('sub', user_id, 'role', 'authenticated', 'aal', 'aal2')::text, true);
+    perform set_config('request.jwt.claims', jsonb_build_object('sub', viewer, 'role', 'authenticated', 'aal', 'aal2')::text, true);
     result := public.catalog_issues(org_a);
     checks := checks || (result->'counts' = '{"missing_price":2,"below_cost":2,"no_markup":1,"duplicate_barcodes":2}'::jsonb);
     labels := labels || 'privileged role with TOTP gets correct counts in own store'::text;

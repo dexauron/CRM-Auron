@@ -33,7 +33,7 @@ npx supabase@2.119.0 stop
 `web/e2e/catalog-tools.test.mjs` проверяет production-сборку с вымышленными ответами API (не настоящую авторизацию).
 В CI запускается автоматически; настоящие права проверяет `supabase/tests/catalog_tools_test.sql`.
 Локально из `web`: сборка с `VITE_SUPABASE_URL=https://example.supabase.co` и
-`VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_waymarket_e2e_placeholder`, затем
+`VITE_SUPABASE_PUBLISHABLE_KEY=e2e-dummy`, затем
 `npx --no-install playwright install chromium --only-shell` и `npm run test:e2e`.
 Снимки: `web/test-results/catalog-tools/`, в git не добавляются.
 

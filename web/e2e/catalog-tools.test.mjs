@@ -65,7 +65,9 @@ async function withPage(options, run) {
     if (url.hostname === 'telegram.org') return route.fulfill({ contentType: 'application/javascript', body: '// Тестовый SDK уже установлен.' });
     if (url.hostname !== 'example.supabase.co') return route.abort();
     const reply = (data, status = 200, headers = {}) => route.fulfill({ status, contentType: 'application/json',
-      headers: { 'access-control-allow-origin': origin, ...headers }, body: route.request().method() === 'HEAD' ? '' : JSON.stringify(data) });
+      // Как настоящий Supabase: без expose-headers браузер не видит content-range и считает каталог пустым.
+      headers: { 'access-control-allow-origin': origin, 'access-control-expose-headers': 'content-range', ...headers },
+      body: route.request().method() === 'HEAD' ? '' : JSON.stringify(data) });
     if (url.pathname === '/auth/v1/health') return reply({});
     if (url.pathname === '/auth/v1/user') return reply(user);
     if (url.pathname === '/functions/v1/auth-telegram') return reply({ botId: 123456789 });
