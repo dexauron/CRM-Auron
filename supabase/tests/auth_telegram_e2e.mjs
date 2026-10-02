@@ -20,11 +20,17 @@ async function initData(fields, token = TOKEN) {
   p.set('hash', Buffer.from(await hmac(await hmac(enc.encode('WebAppData'), token), dcs)).toString('hex'));
   return p.toString();
 }
+// Окно Telegram Login (вход с ПК): secret = SHA256(токен), подпись — по полям, кроме hash.
+async function widget(fields, token = TOKEN) {
+  const dcs = Object.keys(fields).sort().map((k) => `${k}=${fields[k]}`).join('\n');
+  const secret = new Uint8Array(await crypto.subtle.digest('SHA-256', enc.encode(token)));
+  return { ...fields, hash: Buffer.from(await hmac(secret, dcs)).toString('hex') };
+}
 async function login(data, origin = 'https://dexauron.github.io') {
   const r = await fetch(`${API}/functions/v1/auth-telegram`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', apikey: KEY, Origin: origin },
-    body: JSON.stringify({ initData: data }),
+    body: JSON.stringify(typeof data === 'string' ? { initData: data } : { widget: data }),
   });
   return { status: r.status, body: await r.json(), cors: r.headers.get('access-control-allow-origin') };
 }
@@ -94,6 +100,17 @@ const repaired = await login(await initData({ auth_date: String(now), user: JSON
 const repairedMe = await rest('profiles?select=id,telegram_id', repaired.body.access_token);
 check('недописанный профиль чинится при входе, учётка та же',
   repaired.status === 200 && repairedMe[0]?.id === orphan.id && repairedMe[0]?.telegram_id === halfDone, brief(repaired));
+
+// Вход с ПК: тот же человек через окно Telegram Login попадает в ту же учётку.
+const botInfo = await fetch(`${API}/functions/v1/auth-telegram`, { headers: { Origin: 'https://dexauron.github.io' } }).then((r) => r.json());
+check('номер бота для окна входа', botInfo.botId === 123456789, JSON.stringify(botInfo));
+const pc = await login(await widget({ id: 777000123, first_name: 'Тест', last_name: 'Покупатель', auth_date: now }));
+const pcMe = await rest('profiles?select=id', pc.body.access_token);
+check('вход с ПК — та же учётная запись', pc.status === 200 && pcMe[0]?.id === me[0]?.id, brief(pc));
+const pcForged = await login(await widget({ id: 777000123, auth_date: now }, '987654321:ATTACKER'));
+check('вход с ПК с чужой подписью → 401', pcForged.status === 401 && pcForged.body.error === 'bad_signature', brief(pcForged));
+const pcOld = await login(await widget({ id: 777000123, auth_date: now - 7200 }));
+check('вход с ПК со старыми данными → 401', pcOld.status === 401 && pcOld.body.error === 'expired', brief(pcOld));
 
 console.log(results.join('\n'));
 if (results.some((line) => line.startsWith('FAIL'))) process.exit(1);

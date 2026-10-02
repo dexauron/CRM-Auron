@@ -3,6 +3,8 @@
 //   secret = HMAC_SHA256(key = "WebAppData", message = токен бота)
 //   hash   = hex(HMAC_SHA256(key = secret, message = data_check_string))
 //   data_check_string — все поля, кроме hash, по алфавиту, «ключ=значение» через \n.
+// Вход с ПК — окно Telegram Login (https://core.telegram.org/widgets/login#checking-authorization):
+//   secret = SHA256(токен бота); hash = hex(HMAC_SHA256(key = secret, message = data_check_string)).
 // Только Web Crypto — модуль работает и в Deno (Edge Functions), и в тестах.
 
 export interface TelegramUser {
@@ -103,5 +105,68 @@ export async function verifyInitData(
     },
     authDate,
     startParam: params.get('start_param'),
+  };
+}
+
+// ── Окно Telegram Login (вход с ПК) ──────────────────────────────────────
+
+const WIDGET_MAX_FIELDS = 12;
+const WIDGET_MAX_VALUE = 512;
+
+function widgetCheckString(fields: Record<string, string>): string {
+  return Object.keys(fields)
+    .filter((key) => key !== 'hash')
+    .sort()
+    .map((key) => `${key}=${fields[key]}`)
+    .join('\n');
+}
+
+export async function signLoginWidget(fields: Record<string, string>, botToken: string): Promise<string> {
+  const secret = new Uint8Array(await crypto.subtle.digest('SHA-256', encoder.encode(botToken)));
+  return toHex(await hmac(secret, widgetCheckString(fields)));
+}
+
+/**
+ * Проверяет данные из окна Telegram Login: подпись токеном бота и свежесть.
+ * Поля — простые строки и числа, как их присылает Telegram; всё остальное — malformed.
+ */
+export async function verifyLoginWidget(
+  input: unknown,
+  botToken: string,
+  options: { maxAgeSeconds?: number; now?: number } = {},
+): Promise<VerifiedInitData> {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) throw new InitDataInvalid('malformed');
+  const entries = Object.entries(input as Record<string, unknown>);
+  if (entries.length === 0 || entries.length > WIDGET_MAX_FIELDS) throw new InitDataInvalid('malformed');
+  // Объект без прототипа: ключ вроде «__proto__» не заденет служебные свойства.
+  const fields = Object.create(null) as Record<string, string>;
+  for (const [key, value] of entries) {
+    if (!/^[a-z_]{1,32}$/.test(key)) throw new InitDataInvalid('malformed');
+    if (typeof value !== 'string' && typeof value !== 'number') throw new InitDataInvalid('malformed');
+    const text = String(value);
+    if (text.length > WIDGET_MAX_VALUE) throw new InitDataInvalid('malformed');
+    fields[key] = text;
+  }
+  const hash = fields.hash;
+  if (!hash || !/^[0-9a-f]{64}$/.test(hash)) throw new InitDataInvalid('malformed');
+  if (!safeEqual(await signLoginWidget(fields, botToken), hash)) throw new InitDataInvalid('bad_signature');
+
+  const authDate = Number(fields.auth_date);
+  if (!Number.isSafeInteger(authDate) || authDate <= 0) throw new InitDataInvalid('malformed');
+  const now = options.now ?? Math.floor(Date.now() / 1000);
+  if (authDate > now + 60) throw new InitDataInvalid('from_future');
+  if (now - authDate > (options.maxAgeSeconds ?? 3600)) throw new InitDataInvalid('expired');
+
+  const id = Number(fields.id);
+  if (!Number.isSafeInteger(id) || id <= 0) throw new InitDataInvalid('no_user');
+  return {
+    user: {
+      id,
+      ...(fields.first_name ? { first_name: fields.first_name.slice(0, 100) } : {}),
+      ...(fields.last_name ? { last_name: fields.last_name.slice(0, 100) } : {}),
+      ...(fields.username ? { username: fields.username.slice(0, 64) } : {}),
+    },
+    authDate,
+    startParam: null,
   };
 }

@@ -36,7 +36,9 @@ npx supabase@2.119.0 stop
 4. @BotFather → `/mybots` → бот → Bot Settings → Configure Mini App → включить и указать адрес
    `https://dexauron.github.io/CRM-Auron/`. Тогда кнопка бота открывает приложение, а ссылки-приглашения
    `https://t.me/<бот>?startapp=inv_<токен>` работают.
-5. Необязательно: секрет `ALLOWED_ORIGINS` — сайты, с которых разрешён вход, через запятую
+5. Вход с ПК: @BotFather → бот → Bot Settings → **Domain** (в новом меню BotFather — **Login Widget**) →
+   `dexauron.github.io`. Без этого окно Telegram ответит «Bot domain invalid».
+6. Необязательно: секрет `ALLOWED_ORIGINS` — сайты, с которых разрешён вход, через запятую
    (по умолчанию `https://dexauron.github.io`).
 
 Если в приложении «Telegram не подтвердил вход»: Supabase → Edge Functions → `auth-telegram` → Logs.
