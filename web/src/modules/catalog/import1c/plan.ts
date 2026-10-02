@@ -49,14 +49,30 @@ export const toKopecks = (rubles: number) => Math.round(rubles * 100);
 
 const isPackUnit = (unit: string) => unit.includes('(') || /^(упак|упаковка|блок|кор)/.test(unit);
 
-/** Закупка за базовую единицу (шт или кг), не за упаковку: самая свежая цена среди поставщиков. */
+/** Сколько базовых единиц в упаковке — число в скобках единицы 1С: «упак (48)» → 48, «кг (2,5)» → 2,5. */
+export function packQty(unit: string): number | null {
+  const m = /\(\s*([\d\s]+(?:[.,]\d+)?)\s*\)\s*$/.exec(unit);
+  if (!m?.[1]) return null;
+  const n = Number(m[1].replace(/\s/g, '').replace(',', '.'));
+  return Number.isFinite(n) && n > 1 ? n : null;
+}
+
+/** Закупка за базовую единицу (шт или кг): самая свежая цена среди поставщиков. Цена за упаковку делится на
+ *  число в ней (как в старом каталоге), но только если цены за штуку нет: число в скобках — менее надёжный источник.
+ *  Упаковка без числа пропускается — сколько в ней штук, неизвестно. */
 export function pickPurchase(prices: readonly SupplierPrice[]): number | null {
   let best: SupplierPrice | null = null;
+  let bestPack: { date: string | null; piece: number } | null = null;
   for (const p of prices) {
-    if (p.unit && isPackUnit(p.unit)) continue;
+    if (p.unit && isPackUnit(p.unit)) {
+      const qty = packQty(p.unit);
+      if (qty !== null && (!bestPack || (p.date ?? '') > (bestPack.date ?? ''))) bestPack = { date: p.date, piece: p.price / qty };
+      continue;
+    }
     if (!best || (p.date ?? '') > (best.date ?? '')) best = p;
   }
-  return best ? toKopecks(best.price) : null;
+  if (best) return toKopecks(best.price);
+  return bestPack ? toKopecks(bestPack.piece) : null;
 }
 
 const newId = () => crypto.randomUUID();
