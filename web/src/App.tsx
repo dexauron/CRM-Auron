@@ -120,6 +120,11 @@ export function App() {
     return (
       <div className="app">
         <CatalogScreen
+          editableOrgIds={
+            ready?.secondFactor === 'ok'
+              ? (me?.memberships ?? []).filter((m) => m.role === 'owner' || m.role === 'manager').map((m) => m.orgId)
+              : []
+          }
           groupId={screen.groupId}
           onOpenGroup={(id) => {
             window.location.hash = `catalog/${id}`;

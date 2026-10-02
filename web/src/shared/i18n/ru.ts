@@ -67,6 +67,20 @@ export const ru = {
     inStock: 'есть',
     outOfStock: 'нет в наличии',
     perKg: ' / кг',
+    import: {
+      title: 'Импорт',
+      old: 'Перенести из старого каталога',
+      confirm: 'Точно перенести? Товары добавятся, повторов не будет',
+      cancel: 'Отмена',
+      downloading: 'Скачиваю старый каталог…',
+      progress: (done: number, total: number) =>
+        `Перенесено ${done.toLocaleString('ru-RU')} из ${total.toLocaleString('ru-RU')}`,
+      done: (t: { inserted: number; updated: number; barcodes: number; skipped: number }) =>
+        `Готово: новых ${t.inserted.toLocaleString('ru-RU')}, обновлено ${t.updated.toLocaleString('ru-RU')}, ` +
+        `штрихкодов ${t.barcodes.toLocaleString('ru-RU')}` + (t.skipped ? `, пропущено ${t.skipped}` : ''),
+      error: 'Перенос прервался. Нажмите, чтобы повторить: уже перенесённое не задвоится.',
+      footer: 'Названия, коды, штрихкоды, группы, цены на полке и наличие из старого каталога. Повторный перенос обновит, а не задвоит.',
+    },
   },
   secondFactor: {
     enrollTitle: 'Защита входа',
