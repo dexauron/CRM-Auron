@@ -39,6 +39,11 @@ jobs:
       - run: npm run build
         env:
           VITE_SUPABASE_URL: https://example.supabase.co
+          VITE_SUPABASE_PUBLISHABLE_KEY: e2e-dummy
+      - name: Chromium для браузерных проверок
+        run: npx --no-install playwright install --with-deps chromium --only-shell
+      - name: КАТ-6 — браузер, Telegram, права интерфейса и CSP
+        run: npm run test:e2e
 
   database:
     name: База — миграции и тесты прав

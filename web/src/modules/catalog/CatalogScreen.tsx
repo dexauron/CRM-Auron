@@ -3,6 +3,7 @@ import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { loadCatalog, loadCatalogVersion, loadStore, type CatalogProduct, type Store } from '../../api/catalog';
 import { importCatalog, type ImportTotals } from '../../api/importCatalog';
 import { loadProductsWithPhotos, photoUrl } from '../../api/photos';
+import type { IssueKind } from '../../api/catalogTools';
 import { findByBarcode } from '../../shared/barcode';
 import { STORE_SLUG } from '../../shared/config';
 import { formatShortDateTime } from '../../shared/date';
@@ -17,6 +18,7 @@ import { clearCatalog, readCachedCatalog, saveCatalog } from './catalogCache';
 import { fetchOldCatalog } from './oldCatalog';
 import { planPhotoTransfer, runPhotoTransfer, type TransferPlan } from './photoTransfer';
 import { ProductCard } from './ProductCard';
+import { CatalogTools } from './CatalogTools';
 import { CatalogSearch, type CatalogGroup } from './search';
 
 type Load =
@@ -168,6 +170,11 @@ interface Props {
   groupId: string | null;
   /** Открытая карточка товара (из адреса) или null. */
   productId: string | null;
+  tools: boolean;
+  issueKind: IssueKind | null;
+  viewerId: string | null;
+  accountLoading: boolean;
+  onOpenTools: (kind: IssueKind | null) => void;
   onOpenGroup: (id: string) => void;
   onOpenProduct: (id: string) => void;
   /** Шаг назад: из карточки — к списку, из группы — к группам, из каталога — на главную. */
@@ -178,7 +185,7 @@ interface Props {
   privilegedOrgIds: readonly string[];
 }
 
-export function CatalogScreen({ groupId, productId, onOpenGroup, onOpenProduct, onBack, editableOrgIds, privilegedOrgIds }: Props) {
+export function CatalogScreen({ groupId, productId, tools, issueKind, viewerId, accountLoading, onOpenTools, onOpenGroup, onOpenProduct, onBack, editableOrgIds, privilegedOrgIds }: Props) {
   const [reload, setReload] = useState(0);
   const [load, setLoad] = useState<Load>({ kind: 'loading' });
   const [sync, setSync] = useState<Sync>('checking');
@@ -267,14 +274,14 @@ export function CatalogScreen({ groupId, productId, onOpenGroup, onOpenProduct, 
     </p>
   );
 
-  if (productId) {
-    const product = byId.get(productId) ?? null;
+  const renderProduct = () => {
+    const product = productId ? (byId.get(productId) ?? null) : null;
     const productGroup = product?.groupId ? (ready?.groups.find((g) => g.id === product.groupId) ?? null) : null;
     return (
       <>
         <LargeTitle
           title={product?.name ?? ru.catalog.title}
-          back={{ label: group && !query.trim() ? group.name : ru.catalog.title, onClick: onBack }}
+          back={{ label: tools ? (issueKind ? ru.catalog.tools.names[issueKind] : ru.catalog.tools.title) : group && !query.trim() ? group.name : ru.catalog.title, onClick: onBack }}
         />
         {offlineNotice}
         {load.kind === 'loading' && (
@@ -315,7 +322,33 @@ export function CatalogScreen({ groupId, productId, onOpenGroup, onOpenProduct, 
         )}
       </>
     );
+  };
+
+  if (tools) {
+    const allowed = ready && privilegedOrgIds.includes(ready.store.id);
+    const t = ru.catalog.tools;
+    return (
+      <>
+        {allowed && productId ? renderProduct() : <LargeTitle title={issueKind ? t.names[issueKind] : t.title}
+          back={{ label: issueKind ? t.title : ru.catalog.title, onClick: onBack }} />}
+        {/* Список остаётся смонтирован в карточке: «Назад» сохраняет фильтр и страницу. */}
+        <main hidden={Boolean(allowed && productId)}>
+          {load.kind === 'loading' || accountLoading ? (
+            <Section><Row leading={<span className="spinner" />} title={t.loading} tone="muted" /></Section>
+          ) : ready && allowed ? (
+            <CatalogTools key={`${ready.store.id}:${viewerId ?? ''}:${issueKind ?? 'summary'}`}
+              orgId={ready.store.id} selected={issueKind} onSelect={onOpenTools} onOpenProduct={onOpenProduct} />
+          ) : load.kind === 'error' ? (
+            <Section footer={t.error}><Row title={t.retry} tone="link" onClick={() => setReload((n) => n + 1)} /></Section>
+          ) : (
+            <Section footer={t.denied}><Row title={t.noAccess} tone="muted" /></Section>
+          )}
+        </main>
+      </>
+    );
   }
+
+  if (productId) return renderProduct();
 
   return (
     <>
@@ -363,6 +396,10 @@ export function CatalogScreen({ groupId, productId, onOpenGroup, onOpenProduct, 
           </p>
         )}
         {load.kind === 'missing' && <Section footer={ru.catalog.missing}>{<Row title={ru.catalog.empty} tone="muted" />}</Section>}
+
+        {showGroups && privilegedOrgIds.includes(ready.store.id) && (
+          <Section><Row title={ru.catalog.tools.title} subtitle={ru.catalog.tools.hint} chevron onClick={() => onOpenTools(null)} /></Section>
+        )}
 
         {showGroups && editableOrgIds.includes(ready.store.id) && (
           <ImportSection storeId={ready.store.id} products={ready.products} onImported={() => setReload((n) => n + 1)} />
