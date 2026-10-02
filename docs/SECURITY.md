@@ -17,6 +17,7 @@
 | Уязвимые зависимости | готово | `npm audit` в CI, Dependabot, действия закреплены по хэшу |
 | Статический анализ | готово | CodeQL |
 | Вход через Telegram с проверкой подписи и срока | готово | `supabase/functions/auth-telegram`, тесты `_shared/*.test.ts`, `supabase/tests/auth_telegram_e2e.mjs` |
+| Вход с ПК через окно Telegram: подпись проверяет сервер, без стороннего скрипта | готово | `shared/telegramLogin.ts`, `verifyLoginWidget`, тесты |
 | Нет паролей; открытая регистрация выключена | готово | `supabase/config.toml`, `docs/DECISIONS.md` |
 | Защита от захвата учётки заранее занятым адресом | готово | проверка `app_metadata.telegram_id`, сквозной тест (409) |
 | Токены и `initData` не пишутся в журнал | готово | `auth-telegram/index.ts` |

@@ -2,6 +2,7 @@
 import type { SignInError } from '../../api/auth';
 import { ru } from '../../shared/i18n/ru';
 import { Avatar } from '../../shared/ui/Avatar';
+import { Icon } from '../../shared/ui/icons';
 import { Row, Section } from '../../shared/ui/List';
 import type { AccountState } from './useAccount';
 
@@ -13,12 +14,21 @@ const errorText: Record<SignInError, string> = {
   no_user: ru.account.errors.notConfirmed,
   account_conflict: ru.account.errors.conflict,
   network: ru.account.errors.network,
+  popup_blocked: ru.account.errors.popupBlocked,
   origin_not_allowed: ru.account.errors.unavailable,
   server_not_configured: ru.account.errors.unavailable,
   internal: ru.account.errors.unavailable,
 };
 
-export function Account({ state, inTelegram, onRetry }: { state: AccountState; inTelegram: boolean; onRetry: () => void }) {
+interface Props {
+  state: AccountState;
+  inTelegram: boolean;
+  onRetry: () => void;
+  /** Вход с ПК через окно Telegram; null — недоступен (сервер не ответил). */
+  onBrowserSignIn: (() => void) | null;
+}
+
+export function Account({ state, inTelegram, onRetry, onBrowserSignIn }: Props) {
   if (state.kind === 'loading') {
     return (
       <Section>
@@ -28,12 +38,23 @@ export function Account({ state, inTelegram, onRetry }: { state: AccountState; i
   }
 
   if (state.kind === 'guest') {
-    return (
-      <Section footer={inTelegram ? ru.account.signedOut : ru.account.guest}>
-        {inTelegram ? (
+    if (inTelegram) {
+      return (
+        <Section footer={ru.account.signedOut}>
           <Row title={ru.account.signIn} tone="link" center onClick={onRetry} />
-        ) : (
-          <Row leading={<Avatar name={null} />} inset="avatar" title={ru.account.guestTitle} tone="muted" />
+        </Section>
+      );
+    }
+    return (
+      <Section footer={onBrowserSignIn ? ru.account.browserHint : ru.account.guest}>
+        <Row leading={<Avatar name={null} />} inset="avatar" title={ru.account.guestTitle} tone="muted" />
+        {onBrowserSignIn && (
+          <Row
+            leading={<Icon name="telegram" className="row-icon" />}
+            title={ru.account.browserSignIn}
+            tone="link"
+            onClick={onBrowserSignIn}
+          />
         )}
       </Section>
     );

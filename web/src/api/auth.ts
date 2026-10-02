@@ -33,6 +33,7 @@ export const signInErrors = [
   'origin_not_allowed',
   'server_not_configured',
   'network',
+  'popup_blocked',
   'internal',
 ] as const;
 export type SignInError = (typeof signInErrors)[number];
@@ -52,14 +53,14 @@ export function signInErrorFrom(body: unknown): SignInError {
   return (signInErrors as readonly unknown[]).includes(code) ? (code as SignInError) : 'internal';
 }
 
-export async function signInWithTelegram(initData: string): Promise<void> {
+async function exchange(payload: { initData: string } | { widget: Record<string, unknown> }): Promise<void> {
   if (!url || !key) throw new SignInFailed('server_not_configured');
   let response: Response;
   try {
     response = await fetch(`${url}/functions/v1/auth-telegram`, {
       method: 'POST',
       headers: { apikey: key, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ initData }),
+      body: JSON.stringify(payload),
     });
   } catch {
     throw new SignInFailed('network');
@@ -71,6 +72,23 @@ export async function signInWithTelegram(initData: string): Promise<void> {
   }
   const { error } = await api().auth.setSession({ access_token: body.access_token, refresh_token: body.refresh_token });
   if (error) throw new SignInFailed('internal');
+}
+
+/** Вход из Telegram (Mini App): данные запуска, подписанные Telegram. */
+export const signInWithTelegram = (initData: string) => exchange({ initData });
+
+/** Вход с ПК: данные из окна Telegram Login. */
+export const signInWithTelegramWidget = (widget: Record<string, unknown>) => exchange({ widget });
+
+/** Номер бота для окна Telegram Login (не секрет). null — сервер недоступен. */
+export async function fetchBotId(): Promise<number | null> {
+  if (!url) return null;
+  try {
+    const body: unknown = await fetch(`${url}/functions/v1/auth-telegram`).then((r) => r.json());
+    return isRecord(body) && typeof body.botId === 'number' ? body.botId : null;
+  } catch {
+    return null;
+  }
 }
 
 export async function currentSession(): Promise<Session | null> {

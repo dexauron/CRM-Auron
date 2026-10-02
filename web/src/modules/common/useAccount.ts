@@ -2,7 +2,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   acceptInvite,
+  fetchBotId,
   privilegedRoles,
+  signInWithTelegramWidget,
   currentSession,
   loadMe,
   sessionTelegramId,
@@ -15,6 +17,7 @@ import {
 } from '../../api/auth';
 import { secondFactorState, type SecondFactorState } from '../../api/mfa';
 import { parseInviteParam } from '../../shared/invite';
+import { openTelegramLogin, PopupBlocked } from '../../shared/telegramLogin';
 import type { TelegramWebApp } from '../../shared/telegram';
 
 export type AccountState =
@@ -73,6 +76,19 @@ async function establish(telegram: TelegramWebApp | null): Promise<AccountState>
 export function useAccount(telegram: TelegramWebApp | null | undefined, enabled: boolean) {
   const [state, setState] = useState<AccountState>({ kind: 'loading' });
   const [attempt, setAttempt] = useState(0);
+  const [botId, setBotId] = useState<number | null>(null);
+
+  // В обычном браузере вход — через окно Telegram; ему нужен номер бота.
+  useEffect(() => {
+    if (!enabled || telegram !== null) return;
+    let active = true;
+    void fetchBotId().then((id) => {
+      if (active) setBotId(id);
+    });
+    return () => {
+      active = false;
+    };
+  }, [enabled, telegram]);
 
   useEffect(() => {
     if (!enabled || telegram === undefined) return;
@@ -99,5 +115,23 @@ export function useAccount(telegram: TelegramWebApp | null | undefined, enabled:
     void signOut().finally(() => setState({ kind: 'guest' }));
   }, []);
 
-  return { state, retry, signOut: leave };
+  // Окно открывается сразу в обработчике нажатия — иначе браузер его заблокирует.
+  const signInFromBrowser = useCallback(() => {
+    if (!botId) return;
+    openTelegramLogin(botId).then(
+      async (data) => {
+        if (!data) return;
+        setState({ kind: 'loading' });
+        try {
+          await signInWithTelegramWidget(data);
+          setAttempt((n) => n + 1);
+        } catch (error) {
+          setState({ kind: 'error', code: error instanceof SignInFailed ? error.code : 'internal' });
+        }
+      },
+      (error: unknown) => setState({ kind: 'error', code: error instanceof PopupBlocked ? 'popup_blocked' : 'internal' }),
+    );
+  }, [botId]);
+
+  return { state, retry, signOut: leave, signInFromBrowser: botId ? signInFromBrowser : null };
 }

@@ -1,12 +1,13 @@
 // Вход через Telegram Mini App (ТЗ: раздел 2, раздел 7.1 «Подделка входа через Telegram»).
 //
-// Браузер присылает initData из Telegram. Функция проверяет подпись токеном бота и свежесть (не старше часа),
-// находит или создаёт пользователя и возвращает сессию Supabase. Пароли не используются.
+// Браузер присылает initData из Telegram (Mini App) или данные окна Telegram Login (вход с ПК). Функция проверяет
+// подпись токеном бота и свежесть (не старше часа), находит или создаёт пользователя и возвращает сессию Supabase.
+// Пароли не используются. GET отдаёт номер бота — он нужен окну Telegram Login и не секретен.
 // Пользователь заводится с адресом tg<id>@telegram.invalid (домен .invalid не принимает почту),
 // а связь с Telegram хранится в profiles.telegram_id и app_metadata (их не может изменить сам пользователь).
 
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.117.2';
-import { InitDataInvalid, verifyInitData, type TelegramUser } from '../_shared/telegram-init-data.ts';
+import { InitDataInvalid, verifyInitData, verifyLoginWidget, type TelegramUser } from '../_shared/telegram-init-data.ts';
 
 const ALLOWED_ORIGINS = (Deno.env.get('ALLOWED_ORIGINS') ?? 'https://dexauron.github.io')
   .split(',')
@@ -29,7 +30,7 @@ function key(name: 'SECRET' | 'PUBLISHABLE'): string {
 
 function corsHeaders(origin: string | null): Record<string, string> {
   const headers: Record<string, string> = {
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'content-type, apikey, x-client-info, authorization',
     'Access-Control-Max-Age': '600',
     Vary: 'Origin',
@@ -114,7 +115,7 @@ async function diagnoseToken(botToken: string): Promise<void> {
 Deno.serve(async (req) => {
   const origin = req.headers.get('Origin');
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders(origin) });
-  if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405, origin);
+  if (req.method !== 'POST' && req.method !== 'GET') return json({ error: 'method_not_allowed' }, 405, origin);
   if (origin && !ALLOWED_ORIGINS.includes(origin)) return json({ error: 'origin_not_allowed' }, 403, origin);
 
   // trim: при вставке в настройки к токену легко прилипает пробел или перевод строки.
@@ -124,16 +125,24 @@ Deno.serve(async (req) => {
     return json({ error: 'server_not_configured' }, 500, origin);
   }
 
-  let initData: unknown;
+  if (req.method === 'GET') {
+    const botId = Number(botToken.split(':')[0]);
+    return json({ botId: Number.isSafeInteger(botId) ? botId : null }, 200, origin);
+  }
+
+  let body: { initData?: unknown; widget?: unknown };
   try {
-    ({ initData } = (await req.json()) as { initData?: unknown });
+    body = (await req.json()) as { initData?: unknown; widget?: unknown };
   } catch {
     return json({ error: 'malformed' }, 400, origin);
   }
 
   let verified;
   try {
-    verified = await verifyInitData(String(initData ?? ''), botToken);
+    verified =
+      body?.widget !== undefined
+        ? await verifyLoginWidget(body.widget, botToken)
+        : await verifyInitData(String(body?.initData ?? ''), botToken);
   } catch (e) {
     if (e instanceof InitDataInvalid) {
       console.warn(`auth-telegram: 401 ${e.code}`);

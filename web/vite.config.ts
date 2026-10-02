@@ -7,7 +7,8 @@ import { VitePWA } from 'vite-plugin-pwa';
 // подключает стили встроенными тегами, и строгая политика ему мешает.
 function contentSecurityPolicy(apiUrl: string): Plugin {
   const api = apiUrl ? new URL(apiUrl) : null;
-  const connect = ["'self'"];
+  // oauth.telegram.org — ответ окна входа с ПК, если оно закрылось без сообщения (shared/telegramLogin.ts).
+  const connect = ["'self'", 'https://oauth.telegram.org'];
   const images = ["'self'", 'data:', 'blob:'];
   if (api) {
     connect.push(api.origin, `wss://${api.host}`);

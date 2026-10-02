@@ -99,7 +99,12 @@ export function App() {
       )}
 
       <main>
-        {isServerConfigured && <Account state={account.state} inTelegram={Boolean(telegram)} onRetry={account.retry} />}
+        {isServerConfigured && <Account
+            state={account.state}
+            inTelegram={Boolean(telegram)}
+            onRetry={account.retry}
+            onBrowserSignIn={account.signInFromBrowser}
+          />}
         {ready && ready.secondFactor !== 'ok' && <SecondFactor mode={ready.secondFactor} onDone={account.retry} />}
         {me && ownerOf && (
           <Team orgId={ownerOf.orgId} orgName={ownerOf.orgName} selfId={me.userId} telegram={telegram ?? null} />
