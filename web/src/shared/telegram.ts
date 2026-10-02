@@ -16,6 +16,8 @@ export interface TelegramWebApp {
   /** Открыть ссылку t.me внутри Telegram (например, «поделиться»). */
   openTelegramLink?: (url: string) => void;
   setHeaderColor?: (color: string) => void;
+  /** Кнопка «Назад» в шапке Telegram. */
+  BackButton?: { show: () => void; hide: () => void; onClick: (cb: () => void) => void; offClick: (cb: () => void) => void };
   setBackgroundColor?: (color: string) => void;
 }
 
