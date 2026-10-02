@@ -6,6 +6,7 @@ import { SecondFactor } from './modules/common/SecondFactor';
 import { useAccount } from './modules/common/useAccount';
 import { Team } from './modules/staff/Team';
 import { CatalogScreen } from './modules/catalog/CatalogScreen';
+import { SuppliersScreen } from './modules/suppliers/SuppliersScreen';
 import { ru } from './shared/i18n/ru';
 import { applyTelegramTheme, loadTelegram, type TelegramWebApp } from './shared/telegram';
 import { Icon } from './shared/ui/icons';
@@ -94,7 +95,7 @@ export function App() {
   const navigate = (hash: string) => {
     if (`#${hash}` === window.location.hash) return;
     forward.current = true;
-    window.location.hash = hash;
+    window.location.assign(`#${hash}`);
   };
 
   const goBack = useCallback(() => {
@@ -168,6 +169,24 @@ export function App() {
     );
   }
 
+  if (screen.name === 'suppliers' && isServerConfigured) {
+    const editable = orgsWithRole(['owner', 'manager']);
+    return (
+      <div className="app">
+        <SuppliersScreen
+          orgs={(me?.memberships ?? [])
+            .filter((m) => orgsWithAccess(['owner', 'manager', 'accountant', 'staff']).includes(m.orgId)
+              && ['owner', 'manager', 'accountant', 'staff'].includes(m.role))
+            .map((m) => ({ orgId: m.orgId, orgName: m.orgName, canEdit: editable.includes(m.orgId) }))}
+          supplierId={screen.supplierId}
+          accountLoading={account.state.kind === 'loading'}
+          onOpen={(id) => navigate(`suppliers/${id}`)}
+          onBack={goBack}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="app">
       <LargeTitle title={ru.appName} subtitle={ru.appSubtitle} />
@@ -204,14 +223,14 @@ export function App() {
         )}
         <Section title={ru.modulesTitle} id="modules-title" footer={ru.modulesFooter}>
           {modules.map(({ id, stage, icon, color }) =>
-            id === 'catalog' && isServerConfigured ? (
+            (id === 'catalog' || id === 'suppliers') && isServerConfigured ? (
               <Row
                 key={id}
                 leading={<IconTile icon={icon} color={color} />}
                 title={ru.modules[id].name}
                 subtitle={ru.modules[id].hint}
                 chevron
-                onClick={() => navigate('catalog')}
+                onClick={() => navigate(id)}
               />
             ) : (
               <Row

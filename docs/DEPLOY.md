@@ -70,3 +70,14 @@ PUB="$PUBLISHABLE_KEY" SECRET="$SECRET_KEY" node supabase/tests/auth_telegram_e2
 
 ## Сервер в РФ
 Будет описан после ответа на вопрос 3 (`docs/QUESTIONS.md`).
+
+Настоящие персональные данные (152-ФЗ) разрешаются только на сервере в РФ, одной строкой SQL после миграций
+(через API этот параметр не меняется):
+
+```sql
+insert into private.instance_settings (key, value) values ('real_personal_data', 'true')
+on conflict (key) do update set value = excluded.value;
+```
+
+На тестовом сервере вне РФ строки нет: интерфейс показывает предупреждение «вводите только вымышленные
+контакты», загрузка «Контрагентов» из 1С выключена и на сервере (`import_supplier_contacts`).

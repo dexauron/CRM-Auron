@@ -51,6 +51,9 @@ const paths = {
   ),
   flashlight: <path d="M8 3.5h8v3.2l-2 2.8v11h-4v-11l-2-2.8zM12 13v2.5" />,
   shield: <path d="M12 3.5l7 2.6v5.4c0 4.3-2.9 7.6-7 9-4.1-1.4-7-4.7-7-9V6.1zM9 12l2.2 2.2L15.5 10" />,
+  phone: <path d="M6.6 3.5h2.6l1.4 4-2 1.3a11 11 0 0 0 6.6 6.6l1.3-2 4 1.4v2.6a2 2 0 0 1-2.2 2A16.5 16.5 0 0 1 4.6 5.7a2 2 0 0 1 2-2.2z" />,
+  message: <path d="M4.5 19.5l1.2-3.7A7.8 7.8 0 1 1 9 18.6z" />,
+  plus: <path d="M12 5v14M5 12h14" />,
 } satisfies Record<string, ReactElement>;
 
 export type IconName = keyof typeof paths;

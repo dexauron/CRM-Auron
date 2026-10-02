@@ -22,3 +22,14 @@ describe('КАТ-6: адрес и возврат из карточки', () => {
     expect(screenFromHash(hash)).toEqual({ name: 'home' });
   });
 });
+
+describe('ПСТ-1: адреса поставщиков', () => {
+  const id = '10000000-0000-4000-8000-000000000001';
+  it('список и карточка; «Назад» из карточки — к списку, из списка — на главную', () => {
+    expect(screenFromHash('#suppliers')).toEqual({ name: 'suppliers', supplierId: null });
+    expect(screenFromHash(`#suppliers/${id}`)).toEqual({ name: 'suppliers', supplierId: id });
+    expect(parentHash({ name: 'suppliers', supplierId: id })).toBe('suppliers');
+    expect(parentHash({ name: 'suppliers', supplierId: null })).toBe('');
+    expect(screenFromHash('#suppliers/не-uuid')).toEqual({ name: 'home' });
+  });
+});
