@@ -13,7 +13,7 @@
 | Журнал действий только на добавление | готово | триггер `audit_log_append_only` |
 | Нет секретов в репозитории | готово | gitleaks в CI, push protection GitHub — включить в настройках |
 | Запрет вставки HTML из данных (XSS) | готово | правило ESLint `no-restricted-syntax` |
-| CSP | готово | `web/vite.config.ts` |
+| CSP | готово | `web/vite.config.ts`; `wasm-unsafe-eval` только для сканера, `eval` запрещён |
 | Уязвимые зависимости | готово | `npm audit` в CI, Dependabot, действия закреплены по хэшу |
 | Статический анализ | готово | CodeQL |
 | Вход через Telegram с проверкой подписи и срока | готово | `supabase/functions/auth-telegram`, тесты `_shared/*.test.ts`, `supabase/tests/auth_telegram_e2e.mjs` |

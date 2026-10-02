@@ -692,3 +692,102 @@ a.row {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ── Сканер штрихкода ──────────────────────────────────────── */
+/* Окно камеры всегда тёмное, как камера iPhone: чёрный фон и белый текст в обеих темах. */
+
+.scanner-open body {
+  overflow: hidden;
+}
+
+.scanner {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  overflow: hidden;
+  background: #000;
+  color: #fff;
+}
+
+.scanner-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.scanner-frame {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(80vw, 440px);
+  height: min(26vh, 200px);
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  border-radius: 18px;
+  box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.45);
+  transform: translate(-50%, -50%);
+}
+
+.scanner-bar {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + 8px);
+  right: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+}
+
+.scanner-cancel {
+  min-height: 44px;
+  padding: 0 8px;
+  border: 0;
+  background: none;
+  color: #fff;
+  font-size: 17px;
+  cursor: pointer;
+}
+
+.scanner-torch {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  cursor: pointer;
+}
+
+.scanner-torch-on {
+  background: #fff;
+  color: #000;
+}
+
+.scanner-hint {
+  position: absolute;
+  top: calc(50% + min(13vh, 100px) + 24px);
+  right: 24px;
+  left: 24px;
+  margin: 0;
+  font-size: 15px;
+  text-align: center;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+.scanner-error {
+  top: 40%;
+  font-size: 17px;
+}
+
+.search-scan {
+  color: var(--link);
+}
+
+.search-scan .icon {
+  width: 22px;
+  height: 22px;
+}

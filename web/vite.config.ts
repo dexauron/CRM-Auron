@@ -17,7 +17,8 @@ function contentSecurityPolicy(apiUrl: string): Plugin {
   }
   const policy = [
     "default-src 'self'",
-    "script-src 'self' https://telegram.org",
+    // wasm-unsafe-eval — только запуск WebAssembly (сканер zxing-wasm со своего сайта); eval для JS по-прежнему запрещён.
+    "script-src 'self' https://telegram.org 'wasm-unsafe-eval'",
     "style-src 'self'",
     `img-src ${images.join(' ')}`,
     `connect-src ${connect.join(' ')}`,
@@ -69,6 +70,14 @@ export default defineConfig(({ mode }) => {
           // Ответы сервера не кэшируются сервис-воркером: в них могут быть личные данные.
           navigateFallback: 'index.html',
           globPatterns: ['**/*.{js,css,html,svg,png,webmanifest}'],
+          // Распознаватель штрихкодов (~1 МБ) нужен только там, где нет встроенного: кэшируется при первом сканировании.
+          runtimeCaching: [
+            {
+              urlPattern: ({ url, sameOrigin }) => sameOrigin && url.pathname.endsWith('.wasm'),
+              handler: 'CacheFirst',
+              options: { cacheName: 'wasm', expiration: { maxEntries: 2 } },
+            },
+          ],
         },
       }),
     ],

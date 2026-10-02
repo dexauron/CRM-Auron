@@ -1,11 +1,14 @@
-// Каталог (КАТ-1, КАТ-2, КАТ-4): поиск как в iOS, группы, товары с ценой и наличием, карточка товара. Открыт и гостю.
+// Каталог (КАТ-1…КАТ-4): поиск как в iOS, сканер штрихкода, группы, товары с ценой и наличием, карточка. Открыт и гостю.
 import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { loadCatalog, loadStore, type CatalogProduct, type Store } from '../../api/catalog';
 import { importCatalog, type ImportTotals } from '../../api/importCatalog';
+import { findByBarcode } from '../../shared/barcode';
 import { STORE_SLUG } from '../../shared/config';
 import { ru } from '../../shared/i18n/ru';
 import { Icon } from '../../shared/ui/icons';
 import { LargeTitle } from '../../shared/ui/LargeTitle';
+import { Scanner } from '../../shared/ui/Scanner';
+import { scannerSupported } from '../../shared/scanner';
 import { Row, Section } from '../../shared/ui/List';
 import { formatPrice } from './format';
 import { fetchOldCatalog } from './oldCatalog';
@@ -110,6 +113,7 @@ export function CatalogScreen({ groupId, productId, onOpenGroup, onOpenProduct, 
   const [load, setLoad] = useState<Load>({ kind: 'loading' });
   const [query, setQuery] = useState('');
   const [limit, setLimit] = useState(PAGE);
+  const [scanning, setScanning] = useState(false);
   const deferredQuery = useDeferredValue(query);
 
   useEffect(() => {
@@ -143,6 +147,16 @@ export function CatalogScreen({ groupId, productId, onOpenGroup, onOpenProduct, 
     if (groupId) return ready.products.filter((p) => p.groupId === groupId).sort((a, b) => collator.compare(a.name, b.name));
     return [];
   }, [ready, engine, deferredQuery, groupId]);
+
+  // Один товар со штрихкодом — сразу карточка; несколько или ни одного — поиск по коду.
+  const onScanned = (code: string) => {
+    setScanning(false);
+    const matches = ready ? findByBarcode(ready.products, code) : [];
+    const [only] = matches;
+    if (only && matches.length === 1) return onOpenProduct(only.id);
+    setQuery(code);
+    setLimit(PAGE);
+  };
 
   const group = ready?.groups.find((g) => g.id === groupId) ?? null;
   const back = { label: group ? ru.catalog.title : ru.appName, onClick: onBack };
@@ -206,12 +220,20 @@ export function CatalogScreen({ groupId, productId, onOpenGroup, onOpenProduct, 
           enterKeyHint="search"
           autoComplete="off"
         />
-        {query && (
+        {query ? (
           <button type="button" className="search-clear" aria-label={ru.catalog.clear} onClick={() => setQuery('')}>
             <Icon name="clear" />
           </button>
+        ) : (
+          ready &&
+          scannerSupported() && (
+            <button type="button" className="search-clear search-scan" aria-label={ru.scanner.open} onClick={() => setScanning(true)}>
+              <Icon name="barcode" />
+            </button>
+          )
         )}
       </label>
+      {scanning && <Scanner onCode={onScanned} onClose={() => setScanning(false)} />}
 
       <main>
         {load.kind === 'loading' && (
