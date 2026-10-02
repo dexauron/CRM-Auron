@@ -17,6 +17,10 @@ import { TELEGRAM_BOT } from '../../shared/config';
 import { formatShortDateTime } from '../../shared/date';
 import { ru } from '../../shared/i18n/ru';
 import type { TelegramWebApp } from '../../shared/telegram';
+import { Avatar } from '../../shared/ui/Avatar';
+import { Icon } from '../../shared/ui/icons';
+import { Row, RowAction, Section } from '../../shared/ui/List';
+import { Segmented } from '../../shared/ui/Segmented';
 
 interface Props {
   orgId: string;
@@ -30,6 +34,8 @@ interface CreatedLink {
   role: InvitableRole;
   ttlHours: number;
 }
+
+const ttlOptions = inviteTtlHours.map((h) => ({ value: h as number, label: ru.team.invite.ttlOption(h) }));
 
 export function Team({ orgId, orgName, selfId, telegram }: Props) {
   const [role, setRole] = useState<InvitableRole>('staff');
@@ -104,22 +110,31 @@ export function Team({ orgId, orgName, selfId, telegram }: Props) {
     void run(() => setMemberStatus(member.id, 'disabled'));
   };
 
+  const revoke = (invite: Invite) => {
+    // Отозвали только что созданную ссылку — убираем её с экрана, чтобы не отправить по ошибке.
+    if (invite.id === invites[0]?.id) setLink(null);
+    void run(() => revokeInvite(invite.id));
+  };
+
   return (
-    <section className="card" aria-labelledby="team-title">
-      <h2 id="team-title" className="section-title">
-        {ru.team.title}
-      </h2>
+    <>
       {error && (
-        <p className="card-text text-bad" role="alert">
+        <p className="notice tone-bad" role="alert">
+          <Icon name="warning" />
           {error}
         </p>
       )}
 
-      <h3 className="card-subtitle">{ru.team.invite.title}</h3>
-      <div className="form-row">
-        <label className="field">
-          <span>{ru.team.invite.role}</span>
-          <select className="input" value={role} onChange={(e) => setRole(e.target.value as InvitableRole)}>
+      <Section title={ru.team.invite.title} id="invite-title" footer={ru.team.invite.footer}>
+        <label className="row row-inset-text row-select">
+          <span className="row-main">
+            <span className="row-title">{ru.team.invite.role}</span>
+          </span>
+          <span className="row-trailing">
+            {ru.roles[role]}
+            <Icon name="chevronUpDown" className="row-chevron" />
+          </span>
+          <select aria-label={ru.team.invite.role} value={role} onChange={(e) => setRole(e.target.value as InvitableRole)}>
             {invitableRoles.map((r) => (
               <option key={r} value={r}>
                 {ru.roles[r]}
@@ -127,101 +142,92 @@ export function Team({ orgId, orgName, selfId, telegram }: Props) {
             ))}
           </select>
         </label>
-        <label className="field">
-          <span>{ru.team.invite.ttl}</span>
-          <select className="input" value={ttlHours} onChange={(e) => setTtlHours(Number(e.target.value))}>
-            {inviteTtlHours.map((h) => (
-              <option key={h} value={h}>
-                {ru.team.invite.ttlOption(h)}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-      <button type="button" className="button" disabled={busy} onClick={() => void create()}>
-        {ru.team.invite.create}
-      </button>
+        <div className="row row-inset-text row-stacked">
+          <span className="row-title">{ru.team.invite.ttl}</span>
+          <Segmented label={ru.team.invite.ttl} options={ttlOptions} value={ttlHours} onChange={setTtlHours} />
+        </div>
+        <Row title={ru.team.invite.create} tone="link" center onClick={() => void create()} disabled={busy} />
+      </Section>
 
       {link && (
-        <div className="invite-link" role="status">
-          <p className="card-text">{ru.team.invite.ready(ru.roles[link.role], ru.team.invite.ttlOption(link.ttlHours))}</p>
-          <input
-            className="input"
-            readOnly
-            value={link.url}
-            aria-label={ru.team.invite.linkLabel}
-            onFocus={(e) => e.currentTarget.select()}
-          />
-          <div className="banner-actions">
-            <button type="button" className="button" onClick={share}>
-              {ru.team.invite.share}
-            </button>
-            <button type="button" className="button button-quiet" onClick={() => void copy()}>
-              {copied === 'ok' ? ru.team.invite.copied : ru.team.invite.copy}
-            </button>
+        <Section footer={ru.team.invite.ready(ru.roles[link.role], ru.team.invite.ttlOption(link.ttlHours))}>
+          <div className="row row-inset-text" role="status">
+            <input
+              className="link-field"
+              readOnly
+              value={link.url}
+              aria-label={ru.team.invite.linkLabel}
+              onFocus={(e) => e.currentTarget.select()}
+            />
           </div>
-          {copied === 'fail' && <p className="card-text text-muted">{ru.team.invite.copyFailed}</p>}
-        </div>
+          <Row leading={<Icon name="share" className="row-icon" />} title={ru.team.invite.share} tone="link" onClick={share} />
+          <Row
+            leading={<Icon name="copy" className="row-icon" />}
+            title={copied === 'ok' ? ru.team.invite.copied : ru.team.invite.copy}
+            tone="link"
+            onClick={() => void copy()}
+          />
+          {copied === 'fail' && <Row title={ru.team.invite.copyFailed} tone="muted" inset="text" />}
+        </Section>
       )}
 
-      <h3 className="card-subtitle">{ru.team.invites.title}</h3>
-      {invites.length === 0 ? (
-        <p className="card-text text-muted">{ru.team.invites.empty}</p>
-      ) : (
-        <ul className="rows">
-          {invites.map((invite) => (
-            <li key={invite.id} className="row">
-              <span>
-                {ru.roles[invite.role]} ·{' '}
-                {invite.state === 'active'
+      <Section title={ru.team.invites.title} id="invites-title">
+        {invites.length === 0 ? (
+          <Row title={ru.team.invites.empty} tone="muted" />
+        ) : (
+          invites.map((invite) => (
+            <Row
+              key={invite.id}
+              title={ru.roles[invite.role]}
+              subtitle={
+                invite.state === 'active'
                   ? ru.team.invites.until(formatShortDateTime(invite.expiresAt))
-                  : ru.team.invites.state[invite.state]}
-              </span>
-              {invite.state === 'active' && (
-                <button
-                  type="button"
-                  className="button button-quiet button-small"
-                  disabled={busy}
-                  onClick={() => {
-                    // Отозвали только что созданную ссылку — убираем её с экрана, чтобы не отправить по ошибке.
-                    if (invite.id === invites[0]?.id) setLink(null);
-                    void run(() => revokeInvite(invite.id));
-                  }}
-                >
-                  {ru.team.invites.revoke}
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
+                  : ru.team.invites.state[invite.state]
+              }
+              tone={invite.state === 'active' ? 'default' : 'muted'}
+              trailing={
+                invite.state === 'active' && (
+                  <RowAction tone="bad" disabled={busy} onClick={() => revoke(invite)}>
+                    {ru.team.invites.revoke}
+                  </RowAction>
+                )
+              }
+            />
+          ))
+        )}
+      </Section>
 
-      <h3 className="card-subtitle">{ru.team.members.title}</h3>
-      <p className="card-text text-muted">{ru.team.members.hint}</p>
-      <ul className="rows">
+      <Section title={ru.team.members.title} id="members-title" footer={ru.team.members.hint}>
         {members.map((member) => (
-          <li key={member.id} className="row">
-            <span className={member.status === 'disabled' ? 'text-muted' : undefined}>
-              {member.fullName ?? ru.account.noName} · {ru.roles[member.role]}
-              {member.status === 'disabled' && ` · ${ru.team.members.disabled}`}
-            </span>
-            {member.userId !== selfId && (
-              <button
-                type="button"
-                className={`button button-small ${member.status === 'active' && confirming !== member.id ? 'button-quiet' : ''}`}
-                disabled={busy}
-                onClick={() => toggle(member)}
-              >
-                {member.status === 'disabled'
-                  ? ru.team.members.enable
-                  : confirming === member.id
-                    ? ru.team.members.confirmDisable
-                    : ru.team.members.disable}
-              </button>
-            )}
-          </li>
+          <Row
+            key={member.id}
+            leading={<Avatar name={member.fullName} />}
+            inset="avatar"
+            title={member.fullName ?? ru.account.noName}
+            subtitle={
+              member.status === 'disabled'
+                ? `${ru.roles[member.role]} · ${ru.team.members.disabled}`
+                : ru.roles[member.role]
+            }
+            tone={member.status === 'disabled' ? 'muted' : 'default'}
+            trailing={
+              member.userId !== selfId && (
+                <RowAction
+                  tone={member.status === 'disabled' ? 'link' : 'bad'}
+                  disabled={busy}
+                  onClick={() => toggle(member)}
+                >
+                  {member.status === 'disabled'
+                    ? ru.team.members.enable
+                    : confirming === member.id
+                      ? ru.team.members.confirmDisable
+                      : ru.team.members.disable}
+                </RowAction>
+              )
+            }
+          />
         ))}
-      </ul>
-    </section>
+      </Section>
+    </>
   );
 }

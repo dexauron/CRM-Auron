@@ -15,6 +15,8 @@ export interface TelegramWebApp {
   expand: () => void;
   /** Открыть ссылку t.me внутри Telegram (например, «поделиться»). */
   openTelegramLink?: (url: string) => void;
+  setHeaderColor?: (color: string) => void;
+  setBackgroundColor?: (color: string) => void;
 }
 
 declare global {
@@ -61,21 +63,41 @@ export function loadTelegram(): Promise<TelegramWebApp | null> {
   });
 }
 
-// Цвета темы Telegram → переменные CSS приложения (ТЗ, раздел 9).
-const themeMap: Record<string, string> = {
-  bg_color: '--bg',
-  secondary_bg_color: '--surface',
-  text_color: '--text',
-  hint_color: '--muted',
-  button_color: '--accent',
-  button_text_color: '--accent-text',
+// Цвета темы Telegram → переменные CSS приложения (ТЗ, раздел 9). Для каждой переменной — список ключей
+// по приоритету: новые клиенты присылают цвета секций, старые — только основные.
+const themeMap: Record<string, readonly string[]> = {
+  '--bg': ['secondary_bg_color'],
+  '--surface': ['section_bg_color', 'bg_color'],
+  '--text': ['text_color'],
+  '--muted': ['subtitle_text_color', 'hint_color'],
+  '--section-header': ['section_header_text_color', 'hint_color'],
+  '--separator': ['section_separator_color'],
+  '--accent': ['button_color'],
+  '--accent-text': ['button_text_color'],
+  '--link': ['accent_text_color', 'link_color'],
+  '--bad': ['destructive_text_color'],
 };
+
+const isColor = (value: string | undefined): value is string => Boolean(value && /^#[0-9a-f]{3,8}$/i.test(value));
+
+export function themeVariables(themeParams: Partial<Record<string, string>>): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const [cssVar, keys] of Object.entries(themeMap)) {
+    const value = keys.map((key) => themeParams[key]).find(isColor);
+    if (value) result[cssVar] = value;
+  }
+  return result;
+}
 
 export function applyTelegramTheme(app: TelegramWebApp): void {
   const root = document.documentElement;
-  for (const [key, cssVar] of Object.entries(themeMap)) {
-    const value = app.themeParams[key];
-    if (value && /^#[0-9a-f]{3,8}$/i.test(value)) root.style.setProperty(cssVar, value);
-  }
+  for (const [cssVar, value] of Object.entries(themeVariables(app.themeParams))) root.style.setProperty(cssVar, value);
   root.dataset.scheme = app.colorScheme;
+  // Шапка и фон Telegram — цвета страницы: верх приложения не отделён полосой.
+  try {
+    app.setHeaderColor?.('secondary_bg_color');
+    app.setBackgroundColor?.('secondary_bg_color');
+  } catch {
+    // Старые клиенты Telegram этого не умеют — не страшно.
+  }
 }

@@ -1,26 +1,9 @@
-// Учётная запись: вход через Telegram, имя, роли, принятие приглашения из ссылки.
-import { useEffect, useState } from 'react';
-import {
-  acceptInvite,
-  currentSession,
-  loadMe,
-  sessionTelegramId,
-  signInWithTelegram,
-  signOut,
-  SignInFailed,
-  type InviteResult,
-  type Me,
-  type SignInError,
-} from '../../api/auth';
+// Карточка учётной записи: кто вошёл и в каких магазинах какая роль.
+import type { SignInError } from '../../api/auth';
 import { ru } from '../../shared/i18n/ru';
-import { parseInviteParam } from '../../shared/invite';
-import type { TelegramWebApp } from '../../shared/telegram';
-
-type State =
-  | { kind: 'loading' }
-  | { kind: 'guest' }
-  | { kind: 'error'; code: SignInError }
-  | { kind: 'ready'; me: Me; invite: InviteResult | null };
+import { Avatar } from '../../shared/ui/Avatar';
+import { Row, Section } from '../../shared/ui/List';
+import type { AccountState } from './useAccount';
 
 const errorText: Record<SignInError, string> = {
   expired: ru.account.errors.expired,
@@ -35,133 +18,51 @@ const errorText: Record<SignInError, string> = {
   internal: ru.account.errors.unavailable,
 };
 
-// Telegram повторяет start_param при каждой перезагрузке страницы: приглашение принимаем один раз за запуск.
-async function acceptOnce(token: string): Promise<InviteResult | null> {
-  const mark = `invite:${token.slice(0, 8)}`;
-  try {
-    if (window.sessionStorage.getItem(mark)) return null;
-    window.sessionStorage.setItem(mark, '1');
-  } catch {
-    // Хранилище недоступно — просто принимаем.
-  }
-  return acceptInvite(token);
-}
-
-async function establish(telegram: TelegramWebApp | null): Promise<State> {
-  const signIn = async () => {
-    if (!telegram) return null;
-    await signInWithTelegram(telegram.initData);
-    return currentSession();
-  };
-  let session = await currentSession();
-  if (telegram) {
-    const telegramId = telegram.initDataUnsafe.user?.id;
-    // Нет сессии или она чужая (другой человек на том же устройстве) — входим заново.
-    if (!session || telegramId === undefined || sessionTelegramId(session) !== telegramId) session = await signIn();
-  }
-  if (!session) return { kind: 'guest' };
-  const token = telegram ? parseInviteParam(telegram.initDataUnsafe.start_param) : null;
-  const invite = token ? await acceptOnce(token) : null;
-  try {
-    return { kind: 'ready', me: await loadMe(session.user.id), invite };
-  } catch (error) {
-    // Сессию могли закрыть на сервере (например, после отключения доступа) — в Telegram входим заново.
-    if (!telegram) throw error;
-    session = await signIn();
-    if (!session) return { kind: 'guest' };
-    return { kind: 'ready', me: await loadMe(session.user.id), invite };
-  }
-}
-
-interface Props {
-  /** undefined — ещё выясняем, открыто ли приложение из Telegram. */
-  telegram: TelegramWebApp | null | undefined;
-  /** Сообщает приложению, кто вошёл (null — никто). */
-  onMe?: (me: Me | null) => void;
-}
-
-export function Account({ telegram, onMe }: Props) {
-  const [state, setState] = useState<State>({ kind: 'loading' });
-  const [attempt, setAttempt] = useState(0);
-
-  useEffect(() => {
-    onMe?.(state.kind === 'ready' ? state.me : null);
-  }, [state, onMe]);
-
-  useEffect(() => {
-    if (telegram === undefined) return;
-    let active = true;
-    establish(telegram).then(
-      (next) => {
-        if (active) setState(next);
-      },
-      (error: unknown) => {
-        if (active) setState({ kind: 'error', code: error instanceof SignInFailed ? error.code : 'internal' });
-      },
+export function Account({ state, inTelegram, onRetry }: { state: AccountState; inTelegram: boolean; onRetry: () => void }) {
+  if (state.kind === 'loading') {
+    return (
+      <Section>
+        <Row leading={<span className="spinner" />} title={ru.account.signingIn} tone="muted" />
+      </Section>
     );
-    return () => {
-      active = false;
-    };
-  }, [telegram, attempt]);
+  }
 
-  const retry = () => {
-    setState({ kind: 'loading' });
-    setAttempt((n) => n + 1);
-  };
+  if (state.kind === 'guest') {
+    return (
+      <Section footer={inTelegram ? ru.account.signedOut : ru.account.guest}>
+        {inTelegram ? (
+          <Row title={ru.account.signIn} tone="link" center onClick={onRetry} />
+        ) : (
+          <Row leading={<Avatar name={null} />} inset="avatar" title={ru.account.guestTitle} tone="muted" />
+        )}
+      </Section>
+    );
+  }
 
+  if (state.kind === 'error') {
+    return (
+      <Section footer={errorText[state.code]}>
+        <Row title={ru.account.retry} tone="link" center onClick={onRetry} />
+      </Section>
+    );
+  }
+
+  const { me, invite } = state;
+  const roles = me.memberships.map((m) => `${m.orgName} · ${ru.roles[m.role]}`).join(', ');
   return (
-    <section className="card" aria-live="polite">
-      <h2 className="section-title">{ru.account.title}</h2>
-      {state.kind === 'loading' && <p className="card-text">{ru.account.signingIn}</p>}
-
-      {state.kind === 'guest' && (
-        <>
-          <p className="card-text">{telegram ? ru.account.signedOut : ru.account.guest}</p>
-          {telegram && (
-            <button type="button" className="button" onClick={retry}>
-              {ru.account.signIn}
-            </button>
-          )}
-        </>
+    <Section footer={me.memberships.length ? undefined : ru.account.noAccess}>
+      <div className="profile">
+        <Avatar name={me.fullName} size="large" />
+        <span className="profile-text">
+          <span className="profile-name">{me.fullName ?? ru.account.noName}</span>
+          <span className="profile-roles">{roles || ru.account.noAccessShort}</span>
+        </span>
+      </div>
+      {invite && (
+        <div role="status">
+          <Row title={ru.account.invite[invite]} tone={invite === 'accepted' ? 'good' : 'bad'} inset="text" />
+        </div>
       )}
-
-      {state.kind === 'error' && (
-        <>
-          <p className="card-text text-bad">{errorText[state.code]}</p>
-          <button type="button" className="button" onClick={retry}>
-            {ru.account.retry}
-          </button>
-        </>
-      )}
-
-      {state.kind === 'ready' && (
-        <>
-          <p className="card-text">{ru.account.hello(state.me.fullName ?? ru.account.noName)}</p>
-          {state.invite && (
-            <p className={`card-text ${state.invite === 'accepted' ? 'text-good' : 'text-bad'}`} role="status">
-              {ru.account.invite[state.invite]}
-            </p>
-          )}
-          {state.me.memberships.length > 0 ? (
-            <ul className="account-roles">
-              {state.me.memberships.map(({ orgId, orgName, role }) => (
-                <li key={`${orgId}:${role}`}>
-                  {orgName} · {ru.roles[role]}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="card-text text-muted">{ru.account.noAccess}</p>
-          )}
-          <button
-            type="button"
-            className="button button-quiet"
-            onClick={() => void signOut().finally(() => setState({ kind: 'guest' }))}
-          >
-            {ru.account.signOut}
-          </button>
-        </>
-      )}
-    </section>
+    </Section>
   );
 }

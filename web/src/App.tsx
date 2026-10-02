@@ -1,41 +1,31 @@
 import { useEffect, useState } from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
-import type { Me } from './api/auth';
 import { checkServer, isServerConfigured, type ServerStatus } from './api/client';
 import { Account } from './modules/common/Account';
+import { useAccount } from './modules/common/useAccount';
 import { Team } from './modules/staff/Team';
 import { ru } from './shared/i18n/ru';
 import { applyTelegramTheme, loadTelegram, type TelegramWebApp } from './shared/telegram';
-
-type Platform = keyof typeof ru.platform;
-
-function detectPlatform(): Platform {
-  return window.matchMedia('(display-mode: standalone)').matches ? 'installed' : 'browser';
-}
+import { Icon } from './shared/ui/icons';
+import { IconTile, Row, Section } from './shared/ui/List';
+import { LargeTitle } from './shared/ui/LargeTitle';
 
 const modules = [
-  { id: 'catalog', stage: 1 },
-  { id: 'suppliers', stage: 2 },
-  { id: 'staff', stage: 3 },
-  { id: 'customers', stage: 4 },
-  { id: 'finance', stage: 5 },
+  { id: 'catalog', stage: 1, icon: 'bag', color: 'blue' },
+  { id: 'suppliers', stage: 2, icon: 'truck', color: 'orange' },
+  { id: 'staff', stage: 3, icon: 'people', color: 'indigo' },
+  { id: 'customers', stage: 4, icon: 'heart', color: 'pink' },
+  { id: 'finance', stage: 5, icon: 'chart', color: 'green' },
 ] as const;
 
-const statusText: Record<ServerStatus | 'checking', string> = {
-  checking: ru.server.checking,
-  ok: ru.server.ok,
-  'not-configured': ru.server.notConfigured,
-  unreachable: ru.server.unreachable,
-};
-
 export function App() {
-  const [platform, setPlatform] = useState<Platform>(detectPlatform);
   // undefined — ещё выясняем, открыто ли приложение из Telegram.
   const [telegram, setTelegram] = useState<TelegramWebApp | null | undefined>(undefined);
-  const [me, setMe] = useState<Me | null>(null);
-  const ownerOf = me?.memberships.find((m) => m.role === 'owner');
   const [server, setServer] = useState<ServerStatus | 'checking'>('checking');
   const [online, setOnline] = useState(() => navigator.onLine);
+  const account = useAccount(telegram, isServerConfigured);
+  const me = account.state.kind === 'ready' ? account.state.me : null;
+  const ownerOf = me?.memberships.find((m) => m.role === 'owner');
   const {
     needRefresh: [needRefresh, setNeedRefresh],
     updateServiceWorker,
@@ -49,7 +39,6 @@ export function App() {
         applyTelegramTheme(app);
         app.ready();
         app.expand();
-        setPlatform('telegram');
       }
       setTelegram(app);
     });
@@ -74,53 +63,59 @@ export function App() {
     };
   }, []);
 
+  // Минимализм: состояние связи показываем, только когда что-то не так.
+  const problem = !online
+    ? ru.offline
+    : server === 'unreachable'
+      ? ru.server.unreachable
+      : server === 'not-configured'
+        ? ru.server.notConfigured
+        : null;
+
   return (
     <div className="app">
-      <header className="header">
-        <div>
-          <h1 className="title">{ru.appName}</h1>
-          <p className="subtitle">{ru.appSubtitle}</p>
-        </div>
-        <div className="chips">
-          <span className="chip">{ru.platform[platform]}</span>
-          <span className={`chip chip-${server}`}>{statusText[server]}</span>
-        </div>
-      </header>
+      <LargeTitle title={ru.appName} subtitle={ru.appSubtitle} />
 
-      {!online && <p className="banner banner-warning" role="status">{ru.offline}</p>}
+      {problem && (
+        <p className="notice tone-warn" role="status">
+          <Icon name="warning" />
+          {problem}
+        </p>
+      )}
 
       {needRefresh && (
-        <div className="banner" role="status">
-          <span>{ru.update.text}</span>
-          <div className="banner-actions">
-            <button type="button" className="button" onClick={() => void updateServiceWorker(true)}>
-              {ru.update.action}
-            </button>
-            <button type="button" className="button button-quiet" onClick={() => setNeedRefresh(false)}>
-              {ru.update.later}
-            </button>
-          </div>
-        </div>
+        <Section footer={ru.update.text}>
+          <Row
+            leading={<Icon name="refresh" className="row-icon" />}
+            title={ru.update.action}
+            tone="link"
+            onClick={() => void updateServiceWorker(true)}
+          />
+          <Row title={ru.update.later} tone="muted" inset="icon" onClick={() => setNeedRefresh(false)} />
+        </Section>
       )}
 
       <main>
-        {isServerConfigured && <Account telegram={telegram} onMe={setMe} />}
+        {isServerConfigured && <Account state={account.state} inTelegram={Boolean(telegram)} onRetry={account.retry} />}
         {me && ownerOf && (
           <Team orgId={ownerOf.orgId} orgName={ownerOf.orgName} selfId={me.userId} telegram={telegram ?? null} />
         )}
-        <h2 className="section-title">{ru.modulesTitle}</h2>
-        <ul className="modules">
-          {modules.map(({ id, stage }) => (
-            <li key={id} className="module">
-              <div className="module-head">
-                <span className="module-name">{ru.modules[id].name}</span>
-                <span className="module-stage">{ru.stage(stage)}</span>
-              </div>
-              <p className="module-hint">{ru.modules[id].hint}</p>
-              <span className="module-soon">{ru.soon}</span>
-            </li>
+        <Section title={ru.modulesTitle} id="modules-title" footer={ru.modulesFooter}>
+          {modules.map(({ id, stage, icon, color }) => (
+            <Row
+              key={id}
+              leading={<IconTile icon={icon} color={color} />}
+              title={ru.modules[id].name}
+              subtitle={ru.modules[id].hint}
+              trailing={<span className="row-detail">{ru.stage(stage)}</span>}
+            />
           ))}
-        </ul>
+        </Section>
+        {me && (
+          <Section>
+            <Row title={ru.account.signOut} tone="bad" center onClick={account.signOut} />
+          </Section>
+        )}
       </main>
     </div>
   );

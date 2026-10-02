@@ -2,16 +2,9 @@
 export const ru = {
   appName: 'Way Market',
   appSubtitle: 'Магазин 24/7',
-  platform: {
-    telegram: 'Telegram',
-    installed: 'Приложение',
-    browser: 'Браузер',
-  },
   server: {
-    checking: 'Проверяю связь с сервером…',
-    ok: 'Сервер на связи',
-    notConfigured: 'Сервер не настроен',
-    unreachable: 'Нет связи с сервером',
+    notConfigured: 'Сервер не настроен.',
+    unreachable: 'Нет связи с сервером. Проверьте интернет.',
   },
   offline: 'Нет интернета. Каталог доступен, изменения отправятся позже.',
   update: {
@@ -27,19 +20,19 @@ export const ru = {
     customers: { name: 'Покупатели', hint: 'Списки покупок, отзывы, рассылки' },
     finance: { name: 'Касса и финансы', hint: 'Z-отчёты, движение денег, отчёты' },
   },
+  modulesFooter: 'Разделы откроются по мере готовности.',
   stage: (n: number) => `Этап ${n}`,
-  soon: 'Скоро',
   account: {
-    title: 'Учётная запись',
     signingIn: 'Вход через Telegram…',
+    guestTitle: 'Вход не выполнен',
     guest: 'Войти можно из Telegram: откройте бота магазина и нажмите кнопку приложения.',
     signedOut: 'Вы вышли из учётной записи.',
     signIn: 'Войти',
     retry: 'Повторить',
     signOut: 'Выйти',
-    hello: (name: string) => `Вы вошли: ${name}`,
     noName: 'без имени',
-    noAccess: 'Доступа к магазину пока нет. Владелец выдаёт его ссылкой-приглашением.',
+    noAccessShort: 'Нет доступа к магазину',
+    noAccess: 'Доступ к магазину выдаёт владелец ссылкой-приглашением.',
     invite: {
       accepted: 'Приглашение принято.',
       invalid: 'Приглашение недействительно или истекло. Попросите у владельца новое.',
@@ -54,11 +47,11 @@ export const ru = {
     },
   },
   team: {
-    title: 'Команда',
     invite: {
-      title: 'Пригласить',
+      title: 'Пригласить в команду',
       role: 'Роль',
       ttl: 'Ссылка действует',
+      footer: 'Ссылка одноразовая. Доступ после входа бессрочный, пока вы его не отключите.',
       ttlOption: (hours: number) => (hours === 24 ? '1 день' : hours === 72 ? '3 дня' : hours === 168 ? '7 дней' : `${hours} ч`),
       create: 'Создать ссылку',
       ready: (role: string, ttl: string) =>
@@ -73,8 +66,8 @@ export const ru = {
     invites: {
       title: 'Приглашения',
       empty: 'Приглашений пока нет.',
-      until: (date: string) => `действует до ${date}`,
-      state: { used: 'принято', expired: 'истекло или отозвано' },
+      until: (date: string) => `Действует до ${date}`,
+      state: { used: 'Принято', expired: 'Истекло или отозвано' },
       revoke: 'Отозвать',
     },
     members: {
@@ -82,7 +75,7 @@ export const ru = {
       hint: 'Отключённый сразу теряет доступ к магазину и выходит со всех устройств.',
       disabled: 'отключён',
       disable: 'Отключить',
-      confirmDisable: 'Точно отключить?',
+      confirmDisable: 'Точно?',
       enable: 'Включить',
     },
     errors: {
