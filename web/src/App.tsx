@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
+import type { Me } from './api/auth';
 import { checkServer, isServerConfigured, type ServerStatus } from './api/client';
 import { Account } from './modules/common/Account';
+import { Team } from './modules/staff/Team';
 import { ru } from './shared/i18n/ru';
 import { applyTelegramTheme, loadTelegram, type TelegramWebApp } from './shared/telegram';
 
@@ -30,6 +32,8 @@ export function App() {
   const [platform, setPlatform] = useState<Platform>(detectPlatform);
   // undefined — ещё выясняем, открыто ли приложение из Telegram.
   const [telegram, setTelegram] = useState<TelegramWebApp | null | undefined>(undefined);
+  const [me, setMe] = useState<Me | null>(null);
+  const ownerOf = me?.memberships.find((m) => m.role === 'owner');
   const [server, setServer] = useState<ServerStatus | 'checking'>('checking');
   const [online, setOnline] = useState(() => navigator.onLine);
   const {
@@ -100,7 +104,10 @@ export function App() {
       )}
 
       <main>
-        {isServerConfigured && <Account telegram={telegram} />}
+        {isServerConfigured && <Account telegram={telegram} onMe={setMe} />}
+        {me && ownerOf && (
+          <Team orgId={ownerOf.orgId} orgName={ownerOf.orgName} selfId={me.userId} telegram={telegram ?? null} />
+        )}
         <h2 className="section-title">{ru.modulesTitle}</h2>
         <ul className="modules">
           {modules.map(({ id, stage }) => (
