@@ -3,6 +3,19 @@ import type { ReactElement } from 'react';
 
 const paths = {
   chevronRight: <path d="M9.5 6l6 6-6 6" />,
+  chevronLeft: <path d="M14.5 5.5 8 12l6.5 6.5" />,
+  search: (
+    <>
+      <circle cx="10.5" cy="10.5" r="6" />
+      <path d="M15 15l5 5" />
+    </>
+  ),
+  clear: (
+    <>
+      <circle cx="12" cy="12" r="9" fill="currentColor" stroke="none" />
+      <path d="M9 9l6 6M15 9l-6 6" stroke="var(--surface)" />
+    </>
+  ),
   chevronUpDown: <path d="M8 9.5l4-4 4 4M8 14.5l4 4 4-4" />,
   bag: <path d="M5.5 8.5h13l-1 11.5h-11zM9 8.5V7a3 3 0 0 1 6 0v1.5" />,
   truck: (

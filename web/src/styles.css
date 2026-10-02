@@ -141,6 +141,87 @@ select {
   font-weight: 600;
 }
 
+/* ── Назад и поиск ────────────────────────────────────────── */
+
+.back-button,
+.navbar-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin: 0 0 6px -8px;
+  padding: 6px 8px 6px 2px;
+  border: 0;
+  background: none;
+  color: var(--link);
+  font-size: 17px;
+  cursor: pointer;
+}
+
+.back-button .icon,
+.navbar-back .icon {
+  width: 24px;
+  height: 24px;
+  stroke-width: 2.4;
+}
+
+.navbar-back {
+  position: absolute;
+  left: 8px;
+  margin: 0;
+  pointer-events: auto;
+}
+
+.search-field {
+  position: sticky;
+  top: calc(env(safe-area-inset-top) + 52px);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 20px;
+  padding: 0 8px;
+  border-radius: 10px;
+  background: var(--fill);
+  color: var(--muted);
+}
+
+.search-field input {
+  flex: 1;
+  min-width: 0;
+  min-height: 38px;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font-size: 17px;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.search-field input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.search-clear {
+  display: inline-flex;
+  padding: 4px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.search-clear .icon {
+  width: 18px;
+  height: 18px;
+}
+
+.price {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 /* ── Секции и строки ───────────────────────────────────────── */
 
 .section {

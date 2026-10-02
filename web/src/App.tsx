@@ -5,11 +5,19 @@ import { Account } from './modules/common/Account';
 import { SecondFactor } from './modules/common/SecondFactor';
 import { useAccount } from './modules/common/useAccount';
 import { Team } from './modules/staff/Team';
+import { CatalogScreen } from './modules/catalog/CatalogScreen';
 import { ru } from './shared/i18n/ru';
 import { applyTelegramTheme, loadTelegram, type TelegramWebApp } from './shared/telegram';
 import { Icon } from './shared/ui/icons';
 import { IconTile, Row, Section } from './shared/ui/List';
 import { LargeTitle } from './shared/ui/LargeTitle';
+
+// Экран — в адресе: #catalog — каталог, #catalog/<группа> — товары группы.
+type Screen = { name: 'home' } | { name: 'catalog'; groupId: string | null };
+function screenFromHash(): Screen {
+  const m = /^#catalog(?:\/([0-9a-f-]{36}))?$/.exec(window.location.hash);
+  return m ? { name: 'catalog', groupId: m[1] ?? null } : { name: 'home' };
+}
 
 const modules = [
   { id: 'catalog', stage: 1, icon: 'bag', color: 'blue' },
@@ -24,6 +32,8 @@ export function App() {
   const [telegram, setTelegram] = useState<TelegramWebApp | null | undefined>(undefined);
   const [server, setServer] = useState<ServerStatus | 'checking'>('checking');
   const [online, setOnline] = useState(() => navigator.onLine);
+  // Экраны — через адрес (#catalog): кнопка «Назад» браузера и телефона работает как в приложении.
+  const [screen, setScreen] = useState<Screen>(screenFromHash);
   const account = useAccount(telegram, isServerConfigured);
   const ready = account.state.kind === 'ready' ? account.state : null;
   const me = ready?.me ?? null;
@@ -51,6 +61,37 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    const update = () => {
+      setScreen(screenFromHash());
+      window.scrollTo(0, 0);
+    };
+    window.addEventListener('hashchange', update);
+    return () => window.removeEventListener('hashchange', update);
+  }, []);
+
+  const goHome = () => {
+    if (window.history.length > 1 && window.location.hash) window.history.back();
+    else window.location.hash = '';
+  };
+
+  // В Telegram — его собственная кнопка «Назад» в шапке.
+  useEffect(() => {
+    const button = telegram?.BackButton;
+    if (!button) return;
+    if (screen.name === 'home') {
+      button.hide();
+      return;
+    }
+    const back = () => window.history.back();
+    button.onClick(back);
+    button.show();
+    return () => {
+      button.offClick(back);
+      button.hide();
+    };
+  }, [telegram, screen]);
+
+  useEffect(() => {
     const controller = new AbortController();
     void checkServer(controller.signal).then(setServer);
     return () => controller.abort();
@@ -74,6 +115,20 @@ export function App() {
       : server === 'not-configured'
         ? ru.server.notConfigured
         : null;
+
+  if (screen.name === 'catalog' && isServerConfigured) {
+    return (
+      <div className="app">
+        <CatalogScreen
+          groupId={screen.groupId}
+          onOpenGroup={(id) => {
+            window.location.hash = `catalog/${id}`;
+          }}
+          onBack={goHome}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="app">
@@ -110,15 +165,29 @@ export function App() {
           <Team orgId={ownerOf.orgId} orgName={ownerOf.orgName} selfId={me.userId} telegram={telegram ?? null} />
         )}
         <Section title={ru.modulesTitle} id="modules-title" footer={ru.modulesFooter}>
-          {modules.map(({ id, stage, icon, color }) => (
-            <Row
-              key={id}
-              leading={<IconTile icon={icon} color={color} />}
-              title={ru.modules[id].name}
-              subtitle={ru.modules[id].hint}
-              trailing={<span className="row-detail">{ru.stage(stage)}</span>}
-            />
-          ))}
+          {modules.map(({ id, stage, icon, color }) =>
+            id === 'catalog' && isServerConfigured ? (
+              <Row
+                key={id}
+                leading={<IconTile icon={icon} color={color} />}
+                title={ru.modules[id].name}
+                subtitle={ru.modules[id].hint}
+                chevron
+                onClick={() => {
+                  window.location.hash = 'catalog';
+                }}
+              />
+            ) : (
+              <Row
+                key={id}
+                leading={<IconTile icon={icon} color={color} />}
+                title={ru.modules[id].name}
+                subtitle={ru.modules[id].hint}
+                tone="muted"
+                trailing={<span className="row-detail">{ru.stage(stage)}</span>}
+              />
+            ),
+          )}
         </Section>
         {me && (
           <Section>
