@@ -92,6 +92,10 @@ export const ru = {
         footer: 'Снимите товар на светлом фоне. Геолокация и другие данные снимка удаляются при загрузке.',
         error: 'Не удалось загрузить фото. Проверьте интернет и повторите.',
         notImage: 'Это не фото. Выберите снимок товара.',
+        findOff: 'Найти фото в Open Food Facts',
+        searchingOff: 'Ищу фото по штрихкоду…',
+        notFoundOff: 'В Open Food Facts фото этого товара нет. Снимите его сами.',
+        credit: 'Фото: участники Open Food Facts, лицензия CC BY-SA',
       },
       internal: {
         title: 'Для своих',
@@ -125,6 +129,15 @@ export const ru = {
         `штрихкодов ${t.barcodes.toLocaleString('ru-RU')}` + (t.skipped ? `, пропущено ${t.skipped}` : ''),
       error: 'Перенос прервался. Нажмите, чтобы повторить: уже перенесённое не задвоится.',
       footer: 'Названия, коды, штрихкоды, группы, цены на полке и наличие из старого каталога. Повторный перенос обновит, а не задвоит.',
+      photos: 'Перенести фото из старого каталога',
+      photosPlanning: 'Смотрю, каких фото не хватает…',
+      photosConfirm: (n: number) => `Перенести ${n.toLocaleString('ru-RU')} фото? Займёт несколько минут — не закрывайте экран`,
+      photosNothing: 'Все фото из Open Food Facts уже перенесены.',
+      photosProgress: (done: number, total: number) =>
+        `Перенесено фото ${done.toLocaleString('ru-RU')} из ${total.toLocaleString('ru-RU')}`,
+      photosDone: (done: number, failed: number, other: number) =>
+        `Готово: фото ${done.toLocaleString('ru-RU')}` + (failed ? `, не скачались ${failed.toLocaleString('ru-RU')}` : '') +
+        (other ? `. Ещё ${other.toLocaleString('ru-RU')} фото лежат на старом сервере — их перенесём отдельно` : ''),
     },
   },
   scanner: {

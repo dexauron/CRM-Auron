@@ -9,7 +9,17 @@ function contentSecurityPolicy(apiUrl: string): Plugin {
   const api = apiUrl ? new URL(apiUrl) : null;
   // oauth.telegram.org — ответ окна входа с ПК, если оно закрылось без сообщения (shared/telegramLogin.ts).
   // raw.githubusercontent.com — открытые данные старого каталога для переноса (modules/catalog/oldCatalog.ts).
-  const connect = ["'self'", 'https://oauth.telegram.org', 'https://raw.githubusercontent.com'];
+  // Open Food Facts — открытая база товаров: фото по штрихкоду и перенос фото старого каталога (api/openFoodFacts.ts).
+  const connect = [
+    "'self'",
+    'https://oauth.telegram.org',
+    'https://raw.githubusercontent.com',
+    'https://world.openfoodfacts.org',
+    'https://images.openfoodfacts.org',
+    'https://images.openproductsfacts.org',
+    'https://images.openbeautyfacts.org',
+    'https://images.openpetfoodfacts.org',
+  ];
   const images = ["'self'", 'data:', 'blob:'];
   if (api) {
     connect.push(api.origin, `wss://${api.host}`);

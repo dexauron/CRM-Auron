@@ -19,7 +19,12 @@ describe('parseProduct', () => {
       id: 'p', name: 'X',
       product_photos: [{ path: 'b.jpg', sort: 1 }, { path: 'a.jpg', sort: 0 }, { sort: 2 }, { path: 'c.jpg', sort: 1 }],
     });
-    expect(p?.photos).toEqual(['a.jpg', 'b.jpg', 'c.jpg']);
+    expect(p?.photos.map((f) => f.path)).toEqual(['a.jpg', 'b.jpg', 'c.jpg']);
+  });
+
+  it('КАТ-7: источник фото — только известный, иначе своё', () => {
+    const p = parseProduct({ id: 'p', name: 'X', product_photos: [{ path: 'a.jpg', source: 'openfoodfacts' }, { path: 'b.jpg', source: 'чужое' }] });
+    expect(p?.photos).toEqual([{ path: 'a.jpg', source: 'openfoodfacts' }, { path: 'b.jpg', source: null }]);
   });
 
   it('КАТ-4: лишние поля из ответа не попадают в товар', () => {

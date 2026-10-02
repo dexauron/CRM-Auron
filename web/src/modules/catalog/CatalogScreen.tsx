@@ -2,7 +2,7 @@
 import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { loadCatalog, loadCatalogVersion, loadStore, type CatalogProduct, type Store } from '../../api/catalog';
 import { importCatalog, type ImportTotals } from '../../api/importCatalog';
-import { photoUrl } from '../../api/photos';
+import { loadProductsWithPhotos, photoUrl } from '../../api/photos';
 import { findByBarcode } from '../../shared/barcode';
 import { STORE_SLUG } from '../../shared/config';
 import { formatShortDateTime } from '../../shared/date';
@@ -15,6 +15,7 @@ import { Row, Section } from '../../shared/ui/List';
 import { formatPrice } from './format';
 import { clearCatalog, readCachedCatalog, saveCatalog } from './catalogCache';
 import { fetchOldCatalog } from './oldCatalog';
+import { planPhotoTransfer, runPhotoTransfer, type TransferPlan } from './photoTransfer';
 import { ProductCard } from './ProductCard';
 import { CatalogSearch, type CatalogGroup } from './search';
 
@@ -32,50 +33,102 @@ type ImportState =
   | { kind: 'confirm' }
   | { kind: 'running'; done: number; total: number }
   | { kind: 'done'; totals: ImportTotals }
+  | { kind: 'photos-planning' }
+  | { kind: 'photos-confirm'; plan: TransferPlan }
+  | { kind: 'photos-running'; done: number; total: number }
+  | { kind: 'photos-done'; text: string }
   | { kind: 'error' };
 
-/** Перенос старого каталога — только владельцу и управляющему (со вторым фактором). */
-function ImportSection({ storeId, onImported }: { storeId: string; onImported: () => void }) {
+/** Экран не гаснет, пока идёт долгий перенос (если телефон это поддерживает). */
+async function keepAwake(): Promise<() => void> {
+  try {
+    const lock = await navigator.wakeLock.request('screen');
+    return () => void lock.release();
+  } catch {
+    return () => undefined;
+  }
+}
+
+/** Перенос старого каталога и его фото — только владельцу и управляющему (со вторым фактором). */
+function ImportSection({ storeId, products, onImported }: { storeId: string; products: readonly CatalogProduct[]; onImported: () => void }) {
   const [state, setState] = useState<ImportState>({ kind: 'idle' });
+  const t = ru.catalog.import;
   const run = async () => {
     setState({ kind: 'running', done: 0, total: 0 });
     try {
-      const { groups, products } = await fetchOldCatalog();
-      const totals = await importCatalog(storeId, groups, products, (done, total) => setState({ kind: 'running', done, total }));
+      const { groups, products: rows } = await fetchOldCatalog();
+      const totals = await importCatalog(storeId, groups, rows, (done, total) => setState({ kind: 'running', done, total }));
       setState({ kind: 'done', totals });
       onImported();
     } catch {
       setState({ kind: 'error' });
     }
   };
+  const planPhotos = async () => {
+    setState({ kind: 'photos-planning' });
+    try {
+      const [{ photos }, withPhotos] = await Promise.all([fetchOldCatalog(), loadProductsWithPhotos(storeId)]);
+      const plan = planPhotoTransfer(photos, products, withPhotos);
+      setState(plan.items.length ? { kind: 'photos-confirm', plan } : { kind: 'photos-done', text: t.photosNothing });
+    } catch {
+      setState({ kind: 'error' });
+    }
+  };
+  const runPhotos = async (plan: TransferPlan) => {
+    const total = plan.items.length;
+    setState({ kind: 'photos-running', done: 0, total });
+    const release = await keepAwake();
+    try {
+      const { done, failed } = await runPhotoTransfer(storeId, plan, (d, f) => setState({ kind: 'photos-running', done: d + f, total }));
+      setState({ kind: 'photos-done', text: t.photosDone(done, failed, plan.otherHost) });
+      onImported();
+    } catch {
+      setState({ kind: 'error' });
+    } finally {
+      release();
+    }
+  };
+  const progress = (text: string) => (
+    <div role="status">
+      <Row leading={<span className="spinner" />} title={text} tone="muted" />
+    </div>
+  );
   return (
-    <Section title={ru.catalog.import.title} id="import-title" footer={ru.catalog.import.footer}>
+    <Section title={t.title} id="import-title" footer={t.footer}>
       {state.kind === 'idle' && (
-        <Row title={ru.catalog.import.old} tone="link" onClick={() => setState({ kind: 'confirm' })} />
+        <>
+          <Row title={t.old} tone="link" onClick={() => setState({ kind: 'confirm' })} />
+          <Row title={t.photos} tone="link" onClick={() => void planPhotos()} />
+        </>
       )}
       {state.kind === 'confirm' && (
         <>
-          <Row title={ru.catalog.import.confirm} tone="link" onClick={() => void run()} />
-          <Row title={ru.catalog.import.cancel} tone="muted" onClick={() => setState({ kind: 'idle' })} />
+          <Row title={t.confirm} tone="link" onClick={() => void run()} />
+          <Row title={t.cancel} tone="muted" onClick={() => setState({ kind: 'idle' })} />
         </>
       )}
-      {state.kind === 'running' && (
-        <div role="status">
-          <Row
-            leading={<span className="spinner" />}
-            title={state.total ? ru.catalog.import.progress(state.done, state.total) : ru.catalog.import.downloading}
-            tone="muted"
-          />
-        </div>
+      {state.kind === 'photos-confirm' && (
+        <>
+          <Row title={t.photosConfirm(state.plan.items.length)} tone="link" onClick={() => void runPhotos(state.plan)} />
+          <Row title={t.cancel} tone="muted" onClick={() => setState({ kind: 'idle' })} />
+        </>
       )}
+      {state.kind === 'running' && progress(state.total ? t.progress(state.done, state.total) : t.downloading)}
+      {state.kind === 'photos-planning' && progress(t.photosPlanning)}
+      {state.kind === 'photos-running' && progress(t.photosProgress(state.done, state.total))}
       {state.kind === 'done' && (
         <div role="status">
-          <Row title={ru.catalog.import.done(state.totals)} tone="good" />
+          <Row title={t.done(state.totals)} tone="good" onClick={() => setState({ kind: 'idle' })} />
+        </div>
+      )}
+      {state.kind === 'photos-done' && (
+        <div role="status">
+          <Row title={state.text} tone="good" onClick={() => setState({ kind: 'idle' })} />
         </div>
       )}
       {state.kind === 'error' && (
         <div role="alert">
-          <Row title={ru.catalog.import.error} tone="bad" onClick={() => setState({ kind: 'idle' })} />
+          <Row title={t.error} tone="bad" onClick={() => setState({ kind: 'idle' })} />
         </div>
       )}
     </Section>
@@ -93,7 +146,7 @@ function ProductRow({ product, onOpen }: { product: CatalogProduct; onOpen: (id:
     <Row
       leading={
         photo ? (
-          <img className="thumb" src={photoUrl(photo, true)} alt="" loading="lazy" decoding="async" />
+          <img className="thumb" src={photoUrl(photo.path, true)} alt="" loading="lazy" decoding="async" />
         ) : (
           <span className="thumb thumb-empty" aria-hidden="true">
             <Icon name="bag" />
@@ -138,7 +191,8 @@ export function CatalogScreen({ groupId, productId, onOpenGroup, onOpenProduct, 
   useEffect(() => {
     let active = true;
     void (async () => {
-      const cached = await readCachedCatalog(STORE_SLUG);
+      // После своего импорта копия на устройстве заведомо устарела — сразу берём каталог с сервера.
+      const cached = reload === 0 ? await readCachedCatalog(STORE_SLUG) : null;
       if (!active) return;
       if (cached) {
         const { store, groups, products, savedAt } = cached;
@@ -311,7 +365,7 @@ export function CatalogScreen({ groupId, productId, onOpenGroup, onOpenProduct, 
         {load.kind === 'missing' && <Section footer={ru.catalog.missing}>{<Row title={ru.catalog.empty} tone="muted" />}</Section>}
 
         {showGroups && editableOrgIds.includes(ready.store.id) && (
-          <ImportSection storeId={ready.store.id} onImported={() => setReload((n) => n + 1)} />
+          <ImportSection storeId={ready.store.id} products={ready.products} onImported={() => setReload((n) => n + 1)} />
         )}
 
         {showGroups && (

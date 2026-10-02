@@ -38,6 +38,20 @@ export function convertOldProduct(row: unknown): ImportProduct | null {
   };
 }
 
+/** Фото товара старого каталога; id и код — чтобы найти этот товар в новом каталоге. */
+export interface OldPhoto {
+  id: string | null;
+  code: string | null;
+  url: string;
+}
+
+export function oldPhotos(row: unknown): OldPhoto[] {
+  if (!isRecord(row) || !Array.isArray(row.photos)) return [];
+  const id = typeof row.id === 'string' && UUID.test(row.id) ? row.id : null;
+  const code = typeof row.code === 'string' && row.code.trim() ? row.code.trim() : null;
+  return (row.photos as unknown[]).filter((u): u is string => typeof u === 'string').map((url) => ({ id, code, url }));
+}
+
 export function convertOldGroup(row: unknown): ImportGroup | null {
   if (!isRecord(row) || typeof row.name !== 'string' || !row.name.trim()) return null;
   return { id: typeof row.id === 'string' && UUID.test(row.id) ? row.id : null, name: row.name.trim() };
@@ -50,7 +64,7 @@ async function getJson(path: string): Promise<unknown> {
 }
 
 /** Скачивает старый каталог: группы и товары (частями, как он хранился). */
-export async function fetchOldCatalog(): Promise<{ groups: ImportGroup[]; products: ImportProduct[] }> {
+export async function fetchOldCatalog(): Promise<{ groups: ImportGroup[]; products: ImportProduct[]; photos: OldPhoto[] }> {
   const index = await getJson('index.json');
   const parts = isRecord(index) && typeof index.n === 'number' ? index.n : 0;
   if (parts < 1 || parts > 100) throw new Error('Непонятный формат старого каталога');
@@ -59,6 +73,7 @@ export async function fetchOldCatalog(): Promise<{ groups: ImportGroup[]; produc
     ...Array.from({ length: parts }, (_, i) => getJson(`p/${String(i).padStart(2, '0')}.json`)),
   ]);
   const groups = (Array.isArray(groupsRaw) ? groupsRaw : []).map(convertOldGroup).filter((g): g is ImportGroup => g !== null);
-  const products = partsRaw.flatMap((part) => (Array.isArray(part) ? part : [])).map(convertOldProduct).filter((p): p is ImportProduct => p !== null);
-  return { groups, products };
+  const rows = partsRaw.flatMap((part) => (Array.isArray(part) ? (part as unknown[]) : []));
+  const products = rows.map(convertOldProduct).filter((p): p is ImportProduct => p !== null);
+  return { groups, products, photos: rows.flatMap(oldPhotos) };
 }
