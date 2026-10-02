@@ -39,6 +39,11 @@ npx supabase@2.119.0 stop
 5. Необязательно: секрет `ALLOWED_ORIGINS` — сайты, с которых разрешён вход, через запятую
    (по умолчанию `https://dexauron.github.io`).
 
+Если в приложении «Telegram не подтвердил вход»: Supabase → Edge Functions → `auth-telegram` → Logs.
+- «Telegram не принял токен» — токен отозван: в секрет `TELEGRAM_BOT_TOKEN` положить действующий (@BotFather → API Token).
+- «не похож на токен бота» — в секрете лишние символы или не то значение.
+- «токен действует для @…» — приложение открыто из другого бота.
+
 Проверка на своём компьютере (нужен Docker):
 ```bash
 npx supabase@2.119.0 start -x realtime,storage-api,imgproxy,mailpit,postgres-meta,studio,logflare,vector,supavisor
