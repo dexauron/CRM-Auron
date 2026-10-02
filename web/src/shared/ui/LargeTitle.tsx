@@ -43,7 +43,9 @@ export function LargeTitle({ title, subtitle, back }: Props) {
             {back.label}
           </button>
         )}
-        <h1 ref={ref}>{title}</h1>
+        <h1 ref={ref} className={title.length > 24 ? 'title-long' : undefined}>
+          {title}
+        </h1>
         {subtitle && <p>{subtitle}</p>}
       </header>
     </>

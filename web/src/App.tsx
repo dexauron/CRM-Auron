@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import { checkServer, isServerConfigured, type ServerStatus } from './api/client';
 import { Account } from './modules/common/Account';
@@ -12,11 +12,21 @@ import { Icon } from './shared/ui/icons';
 import { IconTile, Row, Section } from './shared/ui/List';
 import { LargeTitle } from './shared/ui/LargeTitle';
 
-// Экран — в адресе: #catalog — каталог, #catalog/<группа> — товары группы.
-type Screen = { name: 'home' } | { name: 'catalog'; groupId: string | null };
+// Экран — в адресе: #catalog — каталог, #catalog/<группа> — товары группы,
+// #catalog[/<группа>]/item/<товар> — карточка товара (группа — откуда открыли, для «Назад»).
+type Screen = { name: 'home' } | { name: 'catalog'; groupId: string | null; productId: string | null };
+const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+const CATALOG_HASH = new RegExp(`^#catalog(?:/(${UUID}))?(?:/item/(${UUID}))?$`);
 function screenFromHash(): Screen {
-  const m = /^#catalog(?:\/([0-9a-f-]{36}))?$/.exec(window.location.hash);
-  return m ? { name: 'catalog', groupId: m[1] ?? null } : { name: 'home' };
+  const m = CATALOG_HASH.exec(window.location.hash);
+  return m ? { name: 'catalog', groupId: m[1] ?? null, productId: m[2] ?? null } : { name: 'home' };
+}
+
+/** Куда ведёт «Назад», если открыли экран по ссылке и истории внутри приложения нет. */
+function parentHash(screen: Screen): string {
+  if (screen.name !== 'catalog') return '';
+  if (screen.productId) return screen.groupId ? `catalog/${screen.groupId}` : 'catalog';
+  return screen.groupId ? 'catalog' : '';
 }
 
 const modules = [
@@ -39,6 +49,9 @@ export function App() {
   const me = ready?.me ?? null;
   // Права владельца действуют только после кода из аутентификатора — до этого экран команды не нужен.
   const ownerOf = ready?.secondFactor === 'ok' ? me?.memberships.find((m) => m.role === 'owner') : undefined;
+  // Магазины, где у человека есть одна из ролей (только после второго фактора — без него сервер прав не даст).
+  const orgsWithRole = (roles: readonly string[]) =>
+    ready?.secondFactor === 'ok' ? (me?.memberships ?? []).filter((m) => roles.includes(m.role)).map((m) => m.orgId) : [];
   const {
     needRefresh: [needRefresh, setNeedRefresh],
     updateServiceWorker,
@@ -60,19 +73,45 @@ export function App() {
     };
   }, []);
 
+  // Переход вперёд — экран сверху; «Назад» — к тому месту списка, где человек был (как в iOS).
+  const forward = useRef(false);
+  const depth = useRef(0);
+  const scrolls = useRef(new Map<string, number>());
+  const scrollTarget = useRef(0);
+
   useEffect(() => {
-    const update = () => {
+    if ('scrollRestoration' in window.history) window.history.scrollRestoration = 'manual';
+    const update = (event: HashChangeEvent) => {
+      scrolls.current.set(new URL(event.oldURL).hash, window.scrollY);
+      const hash = window.location.hash;
+      if (forward.current) {
+        depth.current += 1;
+        scrolls.current.delete(hash);
+      } else {
+        depth.current = Math.max(0, depth.current - 1);
+      }
+      scrollTarget.current = forward.current ? 0 : (scrolls.current.get(hash) ?? 0);
+      forward.current = false;
       setScreen(screenFromHash());
-      window.scrollTo(0, 0);
     };
     window.addEventListener('hashchange', update);
     return () => window.removeEventListener('hashchange', update);
   }, []);
 
-  const goHome = () => {
-    if (window.history.length > 1 && window.location.hash) window.history.back();
-    else window.location.hash = '';
+  useLayoutEffect(() => {
+    window.scrollTo(0, scrollTarget.current);
+  }, [screen]);
+
+  const navigate = (hash: string) => {
+    if (`#${hash}` === window.location.hash) return;
+    forward.current = true;
+    window.location.hash = hash;
   };
+
+  const goBack = useCallback(() => {
+    if (depth.current > 0) window.history.back();
+    else window.location.replace(`#${parentHash(screen)}`);
+  }, [screen]);
 
   // В Telegram — его собственная кнопка «Назад» в шапке.
   useEffect(() => {
@@ -82,14 +121,13 @@ export function App() {
       button.hide();
       return;
     }
-    const back = () => window.history.back();
-    button.onClick(back);
+    button.onClick(goBack);
     button.show();
     return () => {
-      button.offClick(back);
+      button.offClick(goBack);
       button.hide();
     };
-  }, [telegram, screen]);
+  }, [telegram, screen, goBack]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -117,19 +155,17 @@ export function App() {
         : null;
 
   if (screen.name === 'catalog' && isServerConfigured) {
+    const groupHash = screen.groupId ? `catalog/${screen.groupId}` : 'catalog';
     return (
       <div className="app">
         <CatalogScreen
-          editableOrgIds={
-            ready?.secondFactor === 'ok'
-              ? (me?.memberships ?? []).filter((m) => m.role === 'owner' || m.role === 'manager').map((m) => m.orgId)
-              : []
-          }
+          editableOrgIds={orgsWithRole(['owner', 'manager'])}
+          privilegedOrgIds={orgsWithRole(['owner', 'manager', 'accountant'])}
           groupId={screen.groupId}
-          onOpenGroup={(id) => {
-            window.location.hash = `catalog/${id}`;
-          }}
-          onBack={goHome}
+          productId={screen.productId}
+          onOpenGroup={(id) => navigate(`catalog/${id}`)}
+          onOpenProduct={(id) => navigate(`${groupHash}/item/${id}`)}
+          onBack={goBack}
         />
       </div>
     );
@@ -178,9 +214,7 @@ export function App() {
                 title={ru.modules[id].name}
                 subtitle={ru.modules[id].hint}
                 chevron
-                onClick={() => {
-                  window.location.hash = 'catalog';
-                }}
+                onClick={() => navigate('catalog')}
               />
             ) : (
               <Row

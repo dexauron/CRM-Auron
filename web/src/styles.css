@@ -138,7 +138,17 @@ select {
 }
 
 .navbar-title {
+  max-width: 55%;
+  overflow: hidden;
   font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Длинный заголовок (название товара) — чуть мельче, чтобы не занимал полэкрана. */
+.large-title h1.title-long {
+  font-size: 28px;
+  line-height: 34px;
 }
 
 /* ── Назад и поиск ────────────────────────────────────────── */
@@ -345,6 +355,57 @@ select {
 .row-detail {
   font-size: 15px;
   white-space: nowrap;
+}
+
+.row-fact .row-trailing {
+  flex-shrink: 1;
+  min-width: 0;
+  max-width: 65%;
+}
+
+.row-fact .row-detail {
+  overflow: hidden;
+  font-size: 17px;
+  text-overflow: ellipsis;
+}
+
+/* ── Карточка товара ───────────────────────────────────────── */
+
+.product-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px;
+}
+
+.product-price {
+  font-size: 28px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
+.pill {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--fill);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.pill-good {
+  background: color-mix(in srgb, var(--good) 15%, transparent);
+  color: var(--good);
+}
+
+.code {
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
 }
 
 .row-chevron {
