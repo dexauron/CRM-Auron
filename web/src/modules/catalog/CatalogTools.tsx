@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   CatalogToolsError, checkKinds, loadCatalogIssues, reportKinds, type CatalogIssue, type CatalogIssues, type IssueKind,
 } from '../../api/catalogTools';
-import { formatDate, formatPeriod } from '../../shared/date';
+import { formatDate, formatPeriod, isoDay } from '../../shared/date';
 import { ru } from '../../shared/i18n/ru';
 import { Row, Section } from '../../shared/ui/List';
 import { formatExactRub } from '../../shared/money';
@@ -23,6 +23,9 @@ function details(item: CatalogIssue, kind: IssueKind): string {
       item.changedAt && formatDate(item.changedAt),
     ].filter(Boolean).join(' · ');
   }
+  if (kind === 'competitor_cheaper' && item.rival !== null && item.rivalPrice !== null && item.observedOn !== null) {
+    return t.rivalLine(item.rival, price(item.rivalPrice, item.unit), isoDay(item.observedOn));
+  }
   if (kind === 'bestsellers' && item.qty !== null) {
     return [item.cashCode && ru.catalog.code(item.cashCode),
       t.sold(item.qty.toLocaleString('ru-RU', { maximumFractionDigits: 3 }), item.unit)].filter(Boolean).join(' · ');
@@ -42,7 +45,7 @@ function figure(item: CatalogIssue, kind: IssueKind) {
   if (kind === 'low_markup' && item.retailPrice !== null && item.purchasePrice !== null) {
     return <span className="price">{percent(item.purchasePrice, item.retailPrice)}</span>;
   }
-  return <span className={`price ${kind === 'below_cost' ? 'tone-bad' : ''}`}>{price(item.retailPrice, item.unit)}</span>;
+  return <span className={`price ${kind === 'below_cost' || kind === 'competitor_cheaper' ? 'tone-bad' : ''}`}>{price(item.retailPrice, item.unit)}</span>;
 }
 
 type State = { kind: 'loading' } | { kind: 'error'; denied: boolean } | { kind: 'ready'; data: CatalogIssues };

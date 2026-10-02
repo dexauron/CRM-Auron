@@ -33,7 +33,8 @@ export function formatDate(iso: string): string {
   return Number.isNaN(date.getTime()) ? '—' : dayShort.format(date);
 }
 
-const isoDay = (iso: string) => {
+/** «2026-10-02» → «02.10.2026». */
+export const isoDay = (iso: string) => {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
   return m ? `${m[3]}.${m[2]}.${m[1]}` : '—';
 };
@@ -41,4 +42,11 @@ const isoDay = (iso: string) => {
 /** Период отчёта «2026-09-01»…«2026-09-30» → «01.09.2026 – 30.09.2026»; один день — одна дата. */
 export function formatPeriod(from: string, to: string): string {
   return from === to ? isoDay(from) : `${isoDay(from)} – ${isoDay(to)}`;
+}
+
+const isoToday = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Europe/Moscow' });
+
+/** Сегодня по времени магазина: «2026-10-02». */
+export function todayIso(now: Date = new Date()): string {
+  return isoToday.format(now);
 }

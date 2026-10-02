@@ -22,8 +22,9 @@ const issue = (p, barcode = null) => ({
   retail_price: p.retail_price === null ? null : String(p.retail_price), purchase_price: '10000',
   barcode, barcode_count: barcode ? 2 : null,
 });
-const counts = { missing_price: 52, below_cost: 1, no_markup: 1, low_markup: 1, duplicate_barcodes: 1, price_rise: 1, bestsellers: 1 };
+const counts = { missing_price: 52, below_cost: 1, no_markup: 1, low_markup: 1, duplicate_barcodes: 1, price_rise: 1, bestsellers: 1, competitor_cheaper: 0 };
 const salesPeriod = { from: '2026-09-01', to: '2026-09-30' };
+const rivalId = '40000000-0000-4000-8000-000000000001';
 let browser;
 let server;
 
@@ -42,7 +43,7 @@ after(async () => { await browser?.close(); server?.kill(); });
 async function withPage(options, run) {
   const { role = 'owner', aal = 'aal2', width = 390, dark = false, telegram = false } = options;
   const context = await browser.newContext({ viewport: { width, height: 844 }, colorScheme: dark ? 'dark' : 'light', serviceWorkers: 'block' });
-  const state = { mode: 'ok', calls: [], violations: [], errors: [] };
+  const state = { mode: 'ok', calls: [], violations: [], errors: [], rivalCalls: [], rivalPosts: [], rivalPrices: [] };
   const user = { id: userId, aud: 'authenticated', role: 'authenticated', email: 'demo@test.invalid',
     app_metadata: { telegram_id: 123456789 }, user_metadata: {}, factors: [{ id: 'test-factor', status: 'verified', factor_type: 'totp' }] };
   const encode = (data) => Buffer.from(JSON.stringify(data)).toString('base64url');
@@ -80,6 +81,19 @@ async function withPage(options, run) {
     if (url.pathname.endsWith('/product_internals')) return reply({ purchase_price: 10000, stock: 1, note: null });
     if (url.pathname.endsWith('/price_history')) return reply([]);
     if (url.pathname.endsWith('/catalog_version')) return reply('test-version');
+    if (url.pathname.endsWith('/competitors')) {
+      state.rivalCalls.push(route.request().method());
+      return reply([{ id: rivalId, name: 'Магнит' }]);
+    }
+    if (url.pathname.endsWith('/competitor_prices')) {
+      state.rivalCalls.push(route.request().method());
+      if (route.request().method() === 'POST') {
+        const body = route.request().postDataJSON();
+        state.rivalPosts.push(body);
+        return reply({ id: 99, competitor_id: body.competitor_id, price: body.price, observed_on: body.observed_on, created_by: userId }, 201);
+      }
+      return reply(state.rivalPrices);
+    }
     if (url.pathname.endsWith('/catalog_issues')) {
       const params = route.request().postDataJSON();
       state.calls.push(params);
@@ -141,6 +155,37 @@ test('КАТ-6: отчёты «Подорожало» и «Ходовые тов
     await page.getByText('Код 2 · Продано 3,5 шт.', { exact: true }).waitFor();
     assert.equal(await page.getByText('350,00\u00a0₽', { exact: true }).count(), 1);
     await page.screenshot({ path: 'test-results/catalog-tools/reports-bestsellers.png', fullPage: true });
+  });
+});
+
+test('КАТ-6: сотрудник зала без второго фактора видит и записывает цену конкурента', async () => {
+  await withPage({ role: 'staff', aal: 'aal1' }, async (page, state) => {
+    state.rivalPrices = [{ id: 1, competitor_id: rivalId, price: 8500, observed_on: '2026-10-01', created_by: userId }];
+    await page.goto(`${base}#catalog/item/${productId(1)}`);
+    await page.getByText('Дешевле в «Магнит» — 85,00\u00a0₽, на 14,00\u00a0₽ меньше нашей', { exact: true }).waitFor();
+    assert.equal(await page.getByText('Закупка', { exact: true }).count(), 0, 'закупку сотрудник не видит');
+    await page.getByRole('button', { name: 'Записать цену магазина' }).click();
+    await page.getByLabel('Цена, ₽').fill('0');
+    await page.getByRole('button', { name: 'Записать', exact: true }).click();
+    await page.getByText('Введите цену больше нуля', { exact: false }).waitFor();
+    await page.getByLabel('Цена, ₽').fill('102,50');
+    await page.screenshot({ path: 'test-results/catalog-tools/rivals-form.png', fullPage: true });
+    await page.getByRole('button', { name: 'Записать', exact: true }).click();
+    await page.getByText('У нас дешевле всех — на 3,50\u00a0₽ дешевле, чем в «Магнит»', { exact: true }).waitFor();
+    assert.equal(state.rivalPosts.length, 1);
+    const post = state.rivalPosts[0];
+    assert.deepEqual({ ...post, observed_on: undefined }, { org_id: orgId, product_id: productId(1), competitor_id: rivalId, price: 10250, observed_on: undefined });
+    assert.match(post.observed_on, /^\d{4}-\d{2}-\d{2}$/);
+    await page.screenshot({ path: 'test-results/catalog-tools/rivals-card.png', fullPage: true });
+  });
+});
+
+test('КАТ-6: покупатель не запрашивает цены конкурентов', async () => {
+  await withPage({ role: 'customer', aal: 'aal1' }, async (page, state) => {
+    await page.goto(`${base}#catalog/item/${productId(1)}`);
+    await page.getByRole('heading', { name: 'Тестовый товар 01' }).waitFor();
+    assert.equal(await page.getByText('Цены в других магазинах', { exact: true }).count(), 0);
+    assert.deepEqual(state.rivalCalls, []);
   });
 });
 
