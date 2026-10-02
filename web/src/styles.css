@@ -855,3 +855,36 @@ a.row {
   width: 22px;
   height: 22px;
 }
+
+/* ── Поле ввода в строке, как в «Настройках» iOS: название слева, значение справа ── */
+
+.row-field {
+  cursor: text;
+}
+
+.row-field .row-title {
+  flex: none;
+}
+
+.row-field input {
+  flex: 1;
+  min-width: 0;
+  min-height: 28px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font-size: 17px;
+  text-align: right;
+  outline: none;
+}
+
+.row-field input::placeholder {
+  color: var(--muted);
+}
+
+.row-field:has(input:focus-visible) {
+  outline: 2px solid var(--link);
+  outline-offset: -2px;
+  border-radius: 8px;
+}

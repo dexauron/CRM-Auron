@@ -64,7 +64,7 @@ begin
 
     perform set_config('request.jwt.claims', jsonb_build_object('sub', viewer, 'role', 'authenticated', 'aal', 'aal2')::text, true);
     result := public.catalog_issues(org_a);
-    checks := checks || (result->'counts' = '{"missing_price":2,"below_cost":2,"no_markup":1,"low_markup":2,"duplicate_barcodes":2,"price_rise":0,"bestsellers":0}'::jsonb);
+    checks := checks || (result->'counts' = '{"missing_price":2,"below_cost":2,"no_markup":1,"low_markup":2,"duplicate_barcodes":2,"price_rise":0,"bestsellers":0,"competitor_cheaper":0}'::jsonb);
     labels := labels || 'privileged role with TOTP gets correct counts in own store'::text;
   end loop;
 

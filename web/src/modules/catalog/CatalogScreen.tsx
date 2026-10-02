@@ -177,9 +177,13 @@ interface Props {
   privilegedOrgIds: readonly string[];
   /** Магазины, где человек — владелец со вторым фактором: закупку и остатки из 1С загружает только он. */
   ownerOrgIds: readonly string[];
+  /** Магазины, где человек видит цены конкурентов (свои роли; сотруднику зала второй фактор не нужен). */
+  rivalReaderOrgIds: readonly string[];
+  /** …и может записать цену (все, кроме бухгалтера). */
+  rivalWriterOrgIds: readonly string[];
 }
 
-export function CatalogScreen({ groupId, productId, tools, issueKind, viewerId, accountLoading, onOpenTools, onOpenGroup, onOpenProduct, onBack, editableOrgIds, privilegedOrgIds, ownerOrgIds }: Props) {
+export function CatalogScreen({ groupId, productId, tools, issueKind, viewerId, accountLoading, onOpenTools, onOpenGroup, onOpenProduct, onBack, editableOrgIds, privilegedOrgIds, ownerOrgIds, rivalReaderOrgIds, rivalWriterOrgIds }: Props) {
   const [reload, setReload] = useState(0);
   const [load, setLoad] = useState<Load>({ kind: 'loading' });
   const [sync, setSync] = useState<Sync>('checking');
@@ -300,6 +304,12 @@ export function CatalogScreen({ groupId, productId, tools, issueKind, viewerId, 
             group={productGroup}
             privileged={privilegedOrgIds.includes(ready.store.id)}
             editOrgId={editableOrgIds.includes(ready.store.id) ? ready.store.id : null}
+            rivals={rivalReaderOrgIds.includes(ready.store.id) ? {
+              orgId: ready.store.id,
+              viewerId,
+              canWrite: rivalWriterOrgIds.includes(ready.store.id),
+              canManage: editableOrgIds.includes(ready.store.id),
+            } : null}
             onPhotosChange={(photos) =>
               setLoad((prev) =>
                 prev.kind === 'ready'

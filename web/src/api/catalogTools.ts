@@ -1,11 +1,11 @@
 // КАТ-6: закрытые отчёты только по запросу, без localStorage / IndexedDB.
 import { api } from './client';
 
-export const issueKinds = ['missing_price', 'below_cost', 'no_markup', 'low_markup', 'duplicate_barcodes', 'price_rise', 'bestsellers'] as const;
+export const issueKinds = ['missing_price', 'below_cost', 'no_markup', 'low_markup', 'duplicate_barcodes', 'price_rise', 'bestsellers', 'competitor_cheaper'] as const;
 export type IssueKind = (typeof issueKinds)[number];
 /** Проверки цен и кодов; остальное — отчёты по истории цен и продажам. */
 export const checkKinds: readonly IssueKind[] = ['missing_price', 'below_cost', 'no_markup', 'low_markup', 'duplicate_barcodes'];
-export const reportKinds: readonly IssueKind[] = ['price_rise', 'bestsellers'];
+export const reportKinds: readonly IssueKind[] = ['price_rise', 'bestsellers', 'competitor_cheaper'];
 export interface CatalogIssue {
   id: string;
   name: string;
@@ -23,6 +23,10 @@ export interface CatalogIssue {
   /** «Ходовые»: продано за период и выручка в копейках. */
   qty: number | null;
   amount: bigint | null;
+  /** «Дешевле у конкурентов»: магазин, его свежая цена и день записи. */
+  rival: string | null;
+  rivalPrice: bigint | null;
+  observedOn: string | null;
 }
 export interface CatalogIssues {
   counts: Record<IssueKind, number>;
@@ -73,6 +77,7 @@ export function parseCatalogIssues(value: unknown): CatalogIssues {
   if (!record(value) || !record(value.counts) || !count(value.total) || !Array.isArray(value.items)) return invalid();
   const counts: Record<IssueKind, number> = {
     missing_price: 0, below_cost: 0, no_markup: 0, low_markup: 0, duplicate_barcodes: 0, price_rise: 0, bestsellers: 0,
+    competitor_cheaper: 0,
   };
   for (const kind of issueKinds) {
     const n = value.counts[kind];
@@ -86,14 +91,18 @@ export function parseCatalogIssues(value: unknown): CatalogIssues {
       || ((row.barcode === null) !== (row.barcode_count === null))) return invalid();
     const priceKind = optional(row.price_kind);
     const changedAt = optional(row.changed_at);
+    const rival = optional(row.rival);
+    const observedOn = optional(row.observed_on);
     if (!(priceKind === null || priceKind === 'retail' || priceKind === 'purchase')
-      || !(changedAt === null || (typeof changedAt === 'string' && !Number.isNaN(Date.parse(changedAt))))) return invalid();
+      || !(changedAt === null || (typeof changedAt === 'string' && !Number.isNaN(Date.parse(changedAt))))
+      || !nullableText(rival) || !(observedOn === null || (typeof observedOn === 'string' && day.test(observedOn)))) return invalid();
     return {
       id: row.id, name: row.name, cashCode: row.cash_code, unit: row.unit,
       retailPrice: price(row.retail_price), purchasePrice: price(row.purchase_price),
       barcode: row.barcode, barcodeCount: row.barcode_count,
       priceKind, oldPrice: price(optional(row.old_price)), newPrice: price(optional(row.new_price)), changedAt,
       qty: quantity(optional(row.qty)), amount: price(optional(row.amount), true),
+      rival, rivalPrice: price(optional(row.rival_price)), observedOn,
     };
   });
   if (items.length > value.total) return invalid();
