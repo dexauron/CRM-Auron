@@ -1,7 +1,7 @@
 // Сопоставление и план загрузки 1С; случаи — из тестов старого каталога, данные вымышленные.
 import { describe, expect, it } from 'vitest';
 import type { CatalogProduct } from '../../../api/catalog';
-import { parseBarcodesReport, parsePriceReport, parseRetailList, parseStockReport } from './parse';
+import { parseBarcodesReport, parsePriceReport, parseRetailList, parseSalesReport, parseStockReport } from './parse';
 import { buildImportPlan, pickPurchase } from './plan';
 
 const product = (id: string, name: string, extra: Partial<CatalogProduct> = {}): CatalogProduct => ({
@@ -88,5 +88,35 @@ describe('КАТ-5: план загрузки 1С', () => {
     ], [], []);
     expect(plan.products).toEqual([expect.objectContaining({ cash_code: '9', barcodes: ['4600000000046'] })]);
     expect(plan.stats.unmatched).toBe(0);
+  });
+});
+
+describe('КАТ-6: продажи в плане загрузки', () => {
+  const sales = (rows: unknown[][]) => {
+    const { recs } = parseSalesReport([['Период: 01.09.2026 - 30.09.2026'], ['Номенклатура', 'Код', 'Количество', 'Сумма'], ...rows]);
+    return { type: 'sales' as const, recs, period: { from: '2026-09-01', to: '2026-09-30' } };
+  };
+  it('товар по коду и по названию; один товар под двумя названиями суммируется; рубли → копейки', () => {
+    const catalog = [product('p1', 'Сникерс 50г', { cashCode: '1463' }), product('p2', 'Молоко Чабан 1л')];
+    const plan = buildImportPlan([sales([
+      ['Snickers', '1 463', '3', '150,50'],
+      ['Чабан Молоко 1л', '', '1,5', '90'],
+      ['Молоко Чабан 1л', '', '1', ''],
+      ['Неизвестный товар', '', '4', '400'],
+    ])], catalog, []);
+    expect(plan.sales).toEqual([{ from: '2026-09-01', to: '2026-09-30', rows: [
+      { product_id: 'p1', qty: 3, amount: 15050 },
+      { product_id: 'p2', qty: 2.5, amount: 9000 },
+    ] }]);
+    expect(plan.stats.unmatched).toBe(1);
+    expect(plan.products).toEqual([]);
+  });
+  it('продажи находят товар, созданный в той же загрузке, и ничего не создают сами', () => {
+    const plan = buildImportPlan([
+      sales([['Хлеб', '', '2', '100']]),
+      { type: 'prices', items: parsePriceReport([HEAD, ['Хлеб', '77', 'Пекарь', 'шт', '40', '02.09.2026', 'Выпечка']]) },
+    ], [], []);
+    expect(plan.products).toHaveLength(1);
+    expect(plan.sales[0]?.rows).toEqual([{ product_id: plan.products[0]?.id, qty: 2, amount: 10000 }]);
   });
 });

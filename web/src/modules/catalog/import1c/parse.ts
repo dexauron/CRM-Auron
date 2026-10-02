@@ -7,7 +7,7 @@ export type Rows = readonly (readonly unknown[])[];
 
 export type ReportType = 'prices' | 'barcodes' | 'stock' | 'retail' | 'sales' | 'contacts' | 'units' | 'photo' | 'stale';
 /** Что умеем загружать сейчас; остальные отчёты узнаём, но откладываем до своих модулей. */
-export const SUPPORTED: readonly ReportType[] = ['prices', 'barcodes', 'stock', 'retail'];
+export const SUPPORTED: readonly ReportType[] = ['prices', 'barcodes', 'stock', 'retail', 'sales'];
 
 export function cellStr(v: unknown): string {
   if (v === null || v === undefined) return '';
@@ -358,4 +358,58 @@ export function parseRetailList(rows: Rows): { recs: RetailRec[]; fileDate: stri
     recs.push({ name, article, group, retail });
   }
   return { recs, fileDate: parseHeaderDate(rows) };
+}
+
+export interface SalesPeriod {
+  from: string;
+  to: string;
+}
+
+/** Период отчёта из шапки: «Период: 01.09.2026 - 30.09.2026»; одна дата — отчёт за день. */
+export function parseReportPeriod(rows: Rows): SalesPeriod | null {
+  for (const row of rows.slice(0, 14)) {
+    const line = row.map(cellStr).join(' ');
+    if (!/период/i.test(line)) continue;
+    const dates = (line.match(/\d{1,2}\.\d{1,2}\.\d{2,4}/g) ?? []).map(parseDateCell);
+    const from = dates[0] ?? null;
+    const to = dates[1] ?? from;
+    if (from && to) return from <= to ? { from, to } : { from: to, to: from };
+  }
+  return null;
+}
+
+export interface SalesRec {
+  name: string;
+  code: string | null;
+  qty: number;
+  /** Выручка в рублях; null — в отчёте нет колонки суммы. */
+  amount: number | null;
+}
+
+/** «Продажи»: итог за период, обычно без кода — товар узнаётся по названию. Строки «Итого» пропускаются. */
+export function parseSalesReport(rows: Rows): { recs: SalesRec[]; period: SalesPeriod | null } {
+  const det = detectColumns(rows);
+  if (!det) throw new Error('Не нашёл строку заголовков (Номенклатура…) в отчёте «Продажи»');
+  const { cols, dataStart } = det;
+  if (cols.qty === undefined) throw new Error('Не нашёл колонку «Количество» — выгрузите «Продажи» с количеством');
+  const nameCol = cols.name ?? 0;
+  const qtyCol = cols.qty;
+  const recs = new Map<string, SalesRec>();
+  for (const row of rows.slice(dataStart)) {
+    const name = cellStr(row[nameCol]);
+    if (!name || /^\s*(итого|всего|total)/i.test(name)) continue;
+    const qty = parseCountNum(row[qtyCol]);
+    if (qty === null) continue;
+    const code = cols.code === undefined ? '' : normCode(row[cols.code]);
+    const amount = cols.amount === undefined ? null : parsePriceNum(row[cols.amount]);
+    const key = code || norm(name);
+    let rec = recs.get(key);
+    if (!rec) {
+      rec = { name, code: code || null, qty: 0, amount: null };
+      recs.set(key, rec);
+    }
+    rec.qty += qty;
+    if (amount !== null) rec.amount = (rec.amount ?? 0) + amount;
+  }
+  return { recs: [...recs.values()], period: parseReportPeriod(rows) };
 }

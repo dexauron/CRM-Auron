@@ -35,8 +35,9 @@ begin
 
   checks := checks || (not has_function_privilege('anon', 'public.catalog_issues(uuid,text,integer,integer)', 'EXECUTE'));
   labels := labels || 'guest has no EXECUTE grant'::text;
-  checks := checks || (select not prosecdef from pg_proc where oid = 'public.catalog_issues(uuid,text,integer,integer)'::regprocedure);
-  labels := labels || 'function uses SECURITY INVOKER and RLS'::text;
+  checks := checks || (select prosecdef and proconfig @> array['search_path=""'] from pg_proc
+    where oid = 'public.catalog_issues(uuid,text,integer,integer)'::regprocedure);
+  labels := labels || 'SECURITY DEFINER with empty search_path; role checked once inside'::text;
 
   perform set_config('role', 'anon', true);
   perform set_config('request.jwt.claims', '{"role":"anon"}', true);
@@ -61,7 +62,7 @@ begin
 
     perform set_config('request.jwt.claims', jsonb_build_object('sub', viewer, 'role', 'authenticated', 'aal', 'aal2')::text, true);
     result := public.catalog_issues(org_a);
-    checks := checks || (result->'counts' = '{"missing_price":2,"below_cost":2,"no_markup":1,"duplicate_barcodes":2}'::jsonb);
+    checks := checks || (result->'counts' = '{"missing_price":2,"below_cost":2,"no_markup":1,"duplicate_barcodes":2,"price_rise":0,"bestsellers":0}'::jsonb);
     labels := labels || 'privileged role with TOTP gets correct counts in own store'::text;
   end loop;
 

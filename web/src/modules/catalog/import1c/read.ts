@@ -1,5 +1,7 @@
 // Чтение файла Excel из 1С (.xlsx и .xls) библиотекой SheetJS — она грузится только при выборе файла.
-import { detectReportType, parseBarcodesReport, parsePriceReport, parseRetailList, parseStockReport, SUPPORTED, type ReportType, type Rows } from './parse';
+import {
+  detectReportType, parseBarcodesReport, parsePriceReport, parseRetailList, parseSalesReport, parseStockReport, SUPPORTED, type ReportType, type Rows,
+} from './parse';
 import type { ParsedReport } from './plan';
 
 const MAX_FILE = 30 * 1024 * 1024;
@@ -27,6 +29,12 @@ export function parseReport(type: ReportType, rows: Rows): ParsedReport | null {
   if (type === 'barcodes') return { type, recs: parseBarcodesReport(rows) };
   if (type === 'stock') return { type, recs: parseStockReport(rows).recs };
   if (type === 'retail') return { type, recs: parseRetailList(rows).recs };
+  if (type === 'sales') {
+    const { recs, period } = parseSalesReport(rows);
+    if (!period) throw new Error('В шапке нет периода («Период: 01.09.2026 - 30.09.2026») — без него продажи не с чем сравнить');
+    if (Date.parse(period.to) - Date.parse(period.from) > 400 * 86_400_000) throw new Error('Период длиннее 400 дней — выгрузите продажи за меньший срок');
+    return { type, recs, period };
+  }
   return null;
 }
 

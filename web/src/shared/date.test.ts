@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatDate, formatDay, formatShortDateTime } from './date';
+import { formatDate, formatDay, formatPeriod, formatShortDateTime } from './date';
 
 describe('formatShortDateTime', () => {
   it('показывает время магазина (UTC+3)', () => {
@@ -25,5 +25,12 @@ describe('formatDate', () => {
   it('переводит время в день магазина (UTC+3)', () => {
     expect(formatDate('2026-10-01T22:30:00Z')).toBe('02.10.2026');
     expect(formatDate('не дата')).toBe('—');
+  });
+});
+
+describe('formatPeriod', () => {
+  it('период и один день', () => {
+    expect(formatPeriod('2026-09-01', '2026-09-30')).toBe('01.09.2026 – 30.09.2026');
+    expect(formatPeriod('2026-09-05', '2026-09-05')).toBe('05.09.2026');
   });
 });

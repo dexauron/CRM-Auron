@@ -32,3 +32,13 @@ export function formatDate(iso: string): string {
   const date = new Date(iso);
   return Number.isNaN(date.getTime()) ? '—' : dayShort.format(date);
 }
+
+const isoDay = (iso: string) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  return m ? `${m[3]}.${m[2]}.${m[1]}` : '—';
+};
+
+/** Период отчёта «2026-09-01»…«2026-09-30» → «01.09.2026 – 30.09.2026»; один день — одна дата. */
+export function formatPeriod(from: string, to: string): string {
+  return from === to ? isoDay(from) : `${isoDay(from)} – ${isoDay(to)}`;
+}

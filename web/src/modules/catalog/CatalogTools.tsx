@@ -1,11 +1,46 @@
 import { useEffect, useState } from 'react';
-import { CatalogToolsError, issueKinds, loadCatalogIssues, type CatalogIssues, type IssueKind } from '../../api/catalogTools';
+import {
+  CatalogToolsError, checkKinds, loadCatalogIssues, reportKinds, type CatalogIssue, type CatalogIssues, type IssueKind,
+} from '../../api/catalogTools';
+import { formatDate, formatPeriod } from '../../shared/date';
 import { ru } from '../../shared/i18n/ru';
 import { Row, Section } from '../../shared/ui/List';
 import { formatExactRub } from '../../shared/money';
 
 const price = (kopecks: bigint | null, unit: 'pcs' | 'kg') =>
   kopecks === null ? '—' : formatExactRub(kopecks) + (unit === 'kg' ? ru.catalog.perKg : '');
+
+/** Рост цены в процентах с одним знаком: 80 → 100 = «+25 %». */
+const percent = (was: bigint, now: bigint) =>
+  was > 0n ? `+${(Number(((now - was) * 1000n) / was) / 10).toLocaleString('ru-RU', { maximumFractionDigits: 1 })}\u00a0%` : '—';
+
+function details(item: CatalogIssue, kind: IssueKind): string {
+  const t = ru.catalog.tools;
+  if (kind === 'price_rise' && item.priceKind && item.oldPrice !== null && item.newPrice !== null) {
+    return [
+      t.rise(t.priceKinds[item.priceKind], price(item.oldPrice, item.unit), price(item.newPrice, item.unit)),
+      item.priceKind === 'purchase' && t.shelf(price(item.retailPrice, item.unit)),
+      item.changedAt && formatDate(item.changedAt),
+    ].filter(Boolean).join(' · ');
+  }
+  if (kind === 'bestsellers' && item.qty !== null) {
+    return [item.cashCode && ru.catalog.code(item.cashCode),
+      t.sold(item.qty.toLocaleString('ru-RU', { maximumFractionDigits: 3 }), item.unit)].filter(Boolean).join(' · ');
+  }
+  return [
+    item.cashCode && ru.catalog.code(item.cashCode),
+    item.barcode ? t.sharedBarcode(item.barcode, item.barcodeCount ?? 0) :
+      item.purchasePrice !== null ? t.purchase(price(item.purchasePrice, item.unit)) : t.noPurchase,
+  ].filter(Boolean).join(' · ');
+}
+
+function figure(item: CatalogIssue, kind: IssueKind) {
+  if (kind === 'price_rise') {
+    return <span className="price tone-bad">{item.oldPrice !== null && item.newPrice !== null ? percent(item.oldPrice, item.newPrice) : '—'}</span>;
+  }
+  if (kind === 'bestsellers') return <span className="price">{item.amount === null ? '—' : formatExactRub(item.amount)}</span>;
+  return <span className={`price ${kind === 'below_cost' ? 'tone-bad' : ''}`}>{price(item.retailPrice, item.unit)}</span>;
+}
 
 type State = { kind: 'loading' } | { kind: 'error'; denied: boolean } | { kind: 'ready'; data: CatalogIssues };
 
@@ -47,26 +82,28 @@ export function CatalogTools({ orgId, selected, onSelect, onOpenProduct }: {
   );
 
   const { data } = state;
+  const kindRow = (kind: IssueKind) => (
+    <Row key={kind} title={t.names[kind]} trailing={<span className="row-detail">{data.counts[kind].toLocaleString('ru-RU')}</span>}
+      chevron onClick={() => onSelect(kind)} />
+  );
   if (!selected) return (
-    <Section footer={t.footer}>
-      {issueKinds.map((kind) => <Row key={kind} title={t.names[kind]}
-        trailing={<span className="row-detail">{data.counts[kind].toLocaleString('ru-RU')}</span>}
-        chevron onClick={() => onSelect(kind)} />)}
-    </Section>
+    <>
+      <Section title={t.checks} id="tools-checks" footer={t.footer}>{checkKinds.map(kindRow)}</Section>
+      <Section title={t.reports} id="tools-reports" footer={t.reportsFooter}>{reportKinds.map(kindRow)}</Section>
+    </>
   );
 
+  const description = selected === 'bestsellers' && data.salesPeriod
+    ? t.salesFor(formatPeriod(data.salesPeriod.from, data.salesPeriod.to)) : t.descriptions[selected];
+  const empty = offset > 0 ? t.pageGone
+    : selected === 'price_rise' ? t.emptyRise : selected === 'bestsellers' && !data.salesPeriod ? t.noSales : t.empty;
   return (
     <>
-      <Section footer={t.descriptions[selected]}>
-        {data.items.length === 0 && <Row title={offset === 0 ? t.empty : t.pageGone} tone="muted" />}
+      <Section footer={description}>
+        {data.items.length === 0 && <Row title={empty} tone="muted" />}
         {data.items.map((item) => (
-          <Row key={`${item.id}:${item.barcode ?? ''}`} title={item.name} chevron onClick={() => onOpenProduct(item.id)}
-            subtitle={[
-              item.cashCode && ru.catalog.code(item.cashCode),
-              item.barcode ? t.sharedBarcode(item.barcode, item.barcodeCount ?? 0) :
-                item.purchasePrice !== null ? t.purchase(price(item.purchasePrice, item.unit)) : t.noPurchase,
-            ].filter(Boolean).join(' · ')}
-            trailing={<span className={`price ${selected === 'below_cost' ? 'tone-bad' : ''}`}>{price(item.retailPrice, item.unit)}</span>} />
+          <Row key={`${item.id}:${item.barcode ?? item.priceKind ?? ''}`} title={item.name} chevron onClick={() => onOpenProduct(item.id)}
+            subtitle={details(item, selected)} trailing={figure(item, selected)} />
         ))}
       </Section>
       <Section footer={t.shown(Math.min(offset + data.items.length, data.total), data.total)}>

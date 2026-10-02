@@ -9,7 +9,9 @@ import {
   parseDateCell,
   parsePriceNum,
   parsePriceReport,
+  parseReportPeriod,
   parseRetailList,
+  parseSalesReport,
   parseStockReport,
 } from './parse';
 
@@ -148,5 +150,35 @@ describe('КАТ-5: остатки, штрихкоды, прайс-лист', ()
     ]);
     expect(fileDate).toBe('2026-07-17');
     expect(recs).toEqual([{ name: 'Кукла Арт.st-917', article: 'st-917', group: 'Игрушки', retail: 1250 }]);
+  });
+});
+
+describe('КАТ-6: отчёт «Продажи»', () => {
+  const SALES = [
+    ['Продажи', 'Период: 01.09.2026 - 30.09.2026'], [],
+    ['Номенклатура', 'Количество', 'Сумма продажи'],
+    ['Молоко 1л', '12', '1 068,00'],
+    ['Хлеб', '2,500', '300'],
+    ['Молоко 1л', '3', '267'],
+    ['Пакет', '5', ''],
+    ['Итого', '22,5', '1 635,00'],
+  ];
+  it('период из шапки: две даты, одна дата, перепутанный порядок, нет периода', () => {
+    expect(parseReportPeriod(SALES)).toEqual({ from: '2026-09-01', to: '2026-09-30' });
+    expect(parseReportPeriod([['Период:', '05.09.2026']])).toEqual({ from: '2026-09-05', to: '2026-09-05' });
+    expect(parseReportPeriod([['Период: 30.09.26 - 01.09.26']])).toEqual({ from: '2026-09-01', to: '2026-09-30' });
+    expect(parseReportPeriod([['Продажи'], ['Номенклатура', 'Количество']])).toBeNull();
+  });
+  it('итог за период по товару; строка «Итого» пропущена; без суммы — null', () => {
+    const { recs, period } = parseSalesReport(SALES);
+    expect(period).toEqual({ from: '2026-09-01', to: '2026-09-30' });
+    expect(recs).toEqual([
+      { name: 'Молоко 1л', code: null, qty: 15, amount: 1335 },
+      { name: 'Хлеб', code: null, qty: 2.5, amount: 300 },
+      { name: 'Пакет', code: null, qty: 5, amount: null },
+    ]);
+  });
+  it('без колонки количества — понятная ошибка', () => {
+    expect(() => parseSalesReport([['Период: 01.09.2026'], ['Номенклатура', 'Сумма']])).toThrow(/Количество/);
   });
 });
