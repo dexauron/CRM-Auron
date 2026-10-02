@@ -20,7 +20,7 @@ begin
   perform set_config('role', 'anon', true);
   perform set_config('request.jwt.claims', json_build_object('role', 'anon')::text, true);
   v0 := public.catalog_version(org_open);
-  log := log || format(check_s, '01', case when v0 ~ '^[0-9a-f]{32}(:[0-9a-f]{32}){2}$' then 'ok  ' else 'FAIL' end, 'guest gets open catalog version');
+  log := log || format(check_s, '01', case when v0 ~ '^[0-9a-f]{32}(:[0-9a-f]{32}){3}$' then 'ok  ' else 'FAIL' end, 'guest gets open catalog version');
   log := log || format(check_s, '02', case when public.catalog_version(org_open) = v0 then 'ok  ' else 'FAIL' end, 'stable without changes');
   log := log || format(check_s, '03', case when public.catalog_version(org_closed) is null and public.catalog_version(gen_random_uuid()) is null
     then 'ok  ' else 'FAIL' end, 'closed store same as missing (null)');

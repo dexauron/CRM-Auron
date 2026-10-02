@@ -5,7 +5,7 @@ import { readOffline, writeOffline } from '../../shared/offline';
 import type { CatalogGroup } from './search';
 
 /** Меняется, когда меняется формат сохранённых данных: старые записи тогда не читаются. */
-const SCHEMA = 1;
+const SCHEMA = 2;
 
 export interface CachedCatalog {
   schema: typeof SCHEMA;
@@ -25,7 +25,9 @@ export function parseCachedCatalog(value: unknown): CachedCatalog | null {
   if (typeof version !== 'string' || typeof savedAt !== 'string') return null;
   if (!isRecord(store) || typeof store.id !== 'string' || typeof store.name !== 'string') return null;
   if (!Array.isArray(groups) || !Array.isArray(products)) return null;
-  if (!products.every((p) => isRecord(p) && typeof p.id === 'string' && typeof p.name === 'string' && Array.isArray(p.barcodes))) {
+  const valid = (p: unknown) =>
+    isRecord(p) && typeof p.id === 'string' && typeof p.name === 'string' && Array.isArray(p.barcodes) && Array.isArray(p.photos);
+  if (!products.every(valid)) {
     return null;
   }
   return value as unknown as CachedCatalog;

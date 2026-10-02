@@ -2,6 +2,7 @@
 import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { loadCatalog, loadCatalogVersion, loadStore, type CatalogProduct, type Store } from '../../api/catalog';
 import { importCatalog, type ImportTotals } from '../../api/importCatalog';
+import { photoUrl } from '../../api/photos';
 import { findByBarcode } from '../../shared/barcode';
 import { STORE_SLUG } from '../../shared/config';
 import { formatShortDateTime } from '../../shared/date';
@@ -87,8 +88,19 @@ const collator = new Intl.Collator('ru');
 function ProductRow({ product, onOpen }: { product: CatalogProduct; onOpen: (id: string) => void }) {
   const stock = product.inStock === true ? ru.catalog.inStock : product.inStock === false ? ru.catalog.outOfStock : null;
   const details = [product.cashCode && ru.catalog.code(product.cashCode), stock].filter(Boolean).join(' · ');
+  const [photo] = product.photos;
   return (
     <Row
+      leading={
+        photo ? (
+          <img className="thumb" src={photoUrl(photo, true)} alt="" loading="lazy" decoding="async" />
+        ) : (
+          <span className="thumb thumb-empty" aria-hidden="true">
+            <Icon name="bag" />
+          </span>
+        )
+      }
+      inset="thumb"
       title={product.name}
       subtitle={details || undefined}
       tone={product.inStock === false ? 'muted' : 'default'}
@@ -232,6 +244,14 @@ export function CatalogScreen({ groupId, productId, onOpenGroup, onOpenProduct, 
             product={product}
             group={productGroup}
             privileged={privilegedOrgIds.includes(ready.store.id)}
+            editOrgId={editableOrgIds.includes(ready.store.id) ? ready.store.id : null}
+            onPhotosChange={(photos) =>
+              setLoad((prev) =>
+                prev.kind === 'ready'
+                  ? { ...prev, products: prev.products.map((p) => (p.id === product.id ? { ...p, photos } : p)) }
+                  : prev,
+              )
+            }
             onOpenGroup={(id) => {
               setQuery('');
               setLimit(PAGE);

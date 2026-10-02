@@ -51,7 +51,7 @@ jobs:
         with:
           version: 2.119.0
       - name: Локальная база Supabase с нашими миграциями
-        run: supabase start -x gotrue,realtime,storage-api,imgproxy,kong,mailpit,postgrest,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
+        run: supabase start -x gotrue,realtime,imgproxy,kong,mailpit,postgrest,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
       - name: RLS на всех таблицах и тесты прав
         run: supabase/tests/run.sh
 
@@ -74,7 +74,7 @@ jobs:
         with:
           version: 2.119.0
       - name: Локальный Supabase (база, вход, REST, шлюз, функции)
-        run: supabase start -x realtime,storage-api,imgproxy,mailpit,postgres-meta,studio,logflare,vector,supavisor
+        run: supabase start -x realtime,imgproxy,mailpit,postgres-meta,studio,logflare,vector,supavisor
       - name: Сквозной вход через Telegram (тестовый токен, не настоящий бот)
         run: |
           printf '%s\n' 'TELEGRAM_BOT_TOKEN=123456789:TEST-token-for-unit-tests-only' 'ALLOWED_ORIGINS=https://dexauron.github.io' > "$RUNNER_TEMP/functions.env"
