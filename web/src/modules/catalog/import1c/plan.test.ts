@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import type { CatalogProduct } from '../../../api/catalog';
 import { parseBarcodesReport, parsePriceReport, parseRetailList, parseSalesReport, parseStockReport } from './parse';
-import { buildImportPlan, pickPurchase } from './plan';
+import { buildImportPlan, packQty, pickPurchase } from './plan';
 
 const product = (id: string, name: string, extra: Partial<CatalogProduct> = {}): CatalogProduct => ({
   id, name, groupId: null, cashCode: null, article: null, barcodes: [], isWeighted: false,
@@ -17,7 +17,25 @@ describe('КАТ-5: план загрузки 1С', () => {
       { supplier: 'Своя', price: 43.33, unit: 'шт', date: '2026-08-01' },
       { supplier: 'Другой', price: 45, unit: 'шт', date: '2026-07-01' },
     ])).toBe(4333);
-    expect(pickPurchase([{ supplier: 'Опт', price: 1920, unit: 'блок (12)', date: null }])).toBeNull();
+  });
+
+  it('только цена за упаковку — делится на число в ней; упаковка без числа пропускается', () => {
+    expect(pickPurchase([{ supplier: 'Опт', price: 1920, unit: 'блок (12)', date: null }])).toBe(16000);
+    expect(pickPurchase([
+      { supplier: 'Опт', price: 1000, unit: 'упак (3)', date: '2026-08-01' },
+      { supplier: 'Опт-2', price: 1920, unit: 'упак (48)', date: '2026-08-05' },
+    ])).toBe(4000);
+    expect(pickPurchase([{ supplier: 'Опт', price: 1000, unit: 'упак (3)', date: null }])).toBe(33333);
+    expect(pickPurchase([{ supplier: 'Опт', price: 500, unit: 'кг (2,5)', date: null }])).toBe(20000);
+    expect(pickPurchase([{ supplier: 'Опт', price: 1920, unit: 'упаковка', date: null }])).toBeNull();
+    expect(pickPurchase([{ supplier: 'Опт', price: 1920, unit: 'упак (1)', date: null }])).toBeNull();
+  });
+  it('число в упаковке из единицы 1С', () => {
+    expect(packQty('упак (48)')).toBe(48);
+    expect(packQty('кг (2,5)')).toBe(2.5);
+    expect(packQty('блок ( 1 000 )')).toBe(1000);
+    expect(packQty('упак')).toBeNull();
+    expect(packQty('шт')).toBeNull();
   });
 
   it('пустой каталог: создаёт товары, группы, закупку; весовой по «кг»; дата поступления — самая свежая', () => {
