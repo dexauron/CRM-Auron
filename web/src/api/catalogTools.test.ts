@@ -4,7 +4,10 @@ import { CatalogToolsError, loadCatalogIssues, parseCatalogIssues } from './cata
 const { rpc, abortSignal } = vi.hoisted(() => ({ rpc: vi.fn(), abortSignal: vi.fn() }));
 vi.mock('./client', () => ({ api: () => ({ rpc }) }));
 const row = { id: 'p1', name: 'Тест', cash_code: '001', unit: 'pcs', retail_price: '9900', purchase_price: '10000', barcode: null, barcode_count: null };
-const report = { counts: { missing_price: 0, below_cost: 1, no_markup: 0, duplicate_barcodes: 0, price_rise: 0, bestsellers: 0 }, total: 1, items: [row] };
+const report = {
+  counts: { missing_price: 0, below_cost: 1, no_markup: 0, low_markup: 0, duplicate_barcodes: 0, price_rise: 0, bestsellers: 0 },
+  total: 1, items: [row],
+};
 
 describe('КАТ-6: ответ сервера', () => {
   it('разбирает суммы без потери копеек и сохраняет ноль отдельно от отсутствующей цены', () => {

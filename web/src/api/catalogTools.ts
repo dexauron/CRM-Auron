@@ -1,10 +1,10 @@
 // КАТ-6: закрытые отчёты только по запросу, без localStorage / IndexedDB.
 import { api } from './client';
 
-export const issueKinds = ['missing_price', 'below_cost', 'no_markup', 'duplicate_barcodes', 'price_rise', 'bestsellers'] as const;
+export const issueKinds = ['missing_price', 'below_cost', 'no_markup', 'low_markup', 'duplicate_barcodes', 'price_rise', 'bestsellers'] as const;
 export type IssueKind = (typeof issueKinds)[number];
 /** Проверки цен и кодов; остальное — отчёты по истории цен и продажам. */
-export const checkKinds: readonly IssueKind[] = ['missing_price', 'below_cost', 'no_markup', 'duplicate_barcodes'];
+export const checkKinds: readonly IssueKind[] = ['missing_price', 'below_cost', 'no_markup', 'low_markup', 'duplicate_barcodes'];
 export const reportKinds: readonly IssueKind[] = ['price_rise', 'bestsellers'];
 export interface CatalogIssue {
   id: string;
@@ -71,7 +71,9 @@ function salesPeriod(value: unknown): CatalogIssues['salesPeriod'] {
 
 export function parseCatalogIssues(value: unknown): CatalogIssues {
   if (!record(value) || !record(value.counts) || !count(value.total) || !Array.isArray(value.items)) return invalid();
-  const counts: Record<IssueKind, number> = { missing_price: 0, below_cost: 0, no_markup: 0, duplicate_barcodes: 0, price_rise: 0, bestsellers: 0 };
+  const counts: Record<IssueKind, number> = {
+    missing_price: 0, below_cost: 0, no_markup: 0, low_markup: 0, duplicate_barcodes: 0, price_rise: 0, bestsellers: 0,
+  };
   for (const kind of issueKinds) {
     const n = value.counts[kind];
     if (!count(n)) return invalid();
