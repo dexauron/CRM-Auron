@@ -7,6 +7,7 @@ import type { IssueKind } from '../../api/catalogTools';
 import { findByBarcode } from '../../shared/barcode';
 import { STORE_SLUG } from '../../shared/config';
 import { formatShortDateTime } from '../../shared/date';
+import { keepAwake } from '../../shared/wakeLock';
 import { ru } from '../../shared/i18n/ru';
 import { Icon } from '../../shared/ui/icons';
 import { LargeTitle } from '../../shared/ui/LargeTitle';
@@ -17,6 +18,7 @@ import { formatPrice } from './format';
 import { clearCatalog, readCachedCatalog, saveCatalog } from './catalogCache';
 import { fetchOldCatalog } from './oldCatalog';
 import { planPhotoTransfer, runPhotoTransfer, type TransferPlan } from './photoTransfer';
+import { OneCImport } from './import1c/OneCImport';
 import { ProductCard } from './ProductCard';
 import { CatalogTools } from './CatalogTools';
 import { CatalogSearch, type CatalogGroup } from './search';
@@ -40,16 +42,6 @@ type ImportState =
   | { kind: 'photos-running'; done: number; total: number }
   | { kind: 'photos-done'; text: string }
   | { kind: 'error' };
-
-/** Экран не гаснет, пока идёт долгий перенос (если телефон это поддерживает). */
-async function keepAwake(): Promise<() => void> {
-  try {
-    const lock = await navigator.wakeLock.request('screen');
-    return () => void lock.release();
-  } catch {
-    return () => undefined;
-  }
-}
 
 /** Перенос старого каталога и его фото — только владельцу и управляющему (со вторым фактором). */
 function ImportSection({ storeId, products, onImported }: { storeId: string; products: readonly CatalogProduct[]; onImported: () => void }) {
@@ -183,9 +175,11 @@ interface Props {
   editableOrgIds: readonly string[];
   /** Магазины, где человек видит закупку и остаток (владелец, управляющий, бухгалтер со вторым фактором). */
   privilegedOrgIds: readonly string[];
+  /** Магазины, где человек — владелец со вторым фактором: закупку и остатки из 1С загружает только он. */
+  ownerOrgIds: readonly string[];
 }
 
-export function CatalogScreen({ groupId, productId, tools, issueKind, viewerId, accountLoading, onOpenTools, onOpenGroup, onOpenProduct, onBack, editableOrgIds, privilegedOrgIds }: Props) {
+export function CatalogScreen({ groupId, productId, tools, issueKind, viewerId, accountLoading, onOpenTools, onOpenGroup, onOpenProduct, onBack, editableOrgIds, privilegedOrgIds, ownerOrgIds }: Props) {
   const [reload, setReload] = useState(0);
   const [load, setLoad] = useState<Load>({ kind: 'loading' });
   const [sync, setSync] = useState<Sync>('checking');
@@ -403,6 +397,17 @@ export function CatalogScreen({ groupId, productId, tools, issueKind, viewerId, 
 
         {showGroups && editableOrgIds.includes(ready.store.id) && (
           <ImportSection storeId={ready.store.id} products={ready.products} onImported={() => setReload((n) => n + 1)} />
+        )}
+
+        {showGroups && editableOrgIds.includes(ready.store.id) && (
+          <OneCImport
+            storeId={ready.store.id}
+            products={ready.products}
+            groups={ready.groups}
+            canWriteInternals={ownerOrgIds.includes(ready.store.id)}
+            refreshing={sync === 'checking'}
+            onImported={() => setReload((n) => n + 1)}
+          />
         )}
 
         {showGroups && (

@@ -27,6 +27,7 @@
 | Предупреждения Supabase Advisors о `SECURITY DEFINER`-функциях — намеренно: роль проверяется внутри каждой | принято | `docs/DECISIONS.md` |
 | Фото: запись только в папку своего магазина, EXIF (геолокация) удаляется до загрузки | готово | `photos_test.sql`, `shared/image.ts`, сценарий в Chromium |
 | На устройстве — только открытый каталог; закрыли каталог — копия стирается | готово | `catalogCache.ts`, сценарий в Chromium |
+| Закупка и остатки из 1С — только владелец с кодом, только товары своего магазина | готово | `import_internals`, тест `import_1c_test.sql` |
 | Импорт каталога только через RPC с проверкой роли и магазина | готово | `import_catalog`, тест `import_test.sql` |
 | КАТ-6: отчёт с RLS, проверкой роли и aal2, без сохранения закупок на устройстве | подготовлено, ожидает CI | `catalog_issues`, `catalog_tools_test.sql`, `web/e2e/catalog-tools.test.mjs` |
 | Отзыв приглашения | готово | `revoke_invite`, тест `team_test.sql` |
