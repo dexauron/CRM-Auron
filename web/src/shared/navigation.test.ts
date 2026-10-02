@@ -33,3 +33,15 @@ describe('ПСТ-1: адреса поставщиков', () => {
     expect(screenFromHash('#suppliers/не-uuid')).toEqual({ name: 'home' });
   });
 });
+
+describe('ПСТ-3: «Закончилось на полке»', () => {
+  const id = '10000000-0000-4000-8000-000000000001';
+  it('список и карточка из него; «Назад» — к списку, из списка — в каталог', () => {
+    const list = screenFromHash('#catalog/restock');
+    expect(list).toEqual({ name: 'catalog', groupId: null, productId: null, tools: false, issueKind: null, restock: true });
+    expect(parentHash(list)).toBe('catalog');
+    const card = screenFromHash(`#catalog/restock/item/${id}`);
+    expect(parentHash(card)).toBe('catalog/restock');
+    if (card.name === 'catalog') expect(catalogListHash(card)).toBe('catalog/restock');
+  });
+});

@@ -15,6 +15,8 @@ import { Row, Section } from '../../shared/ui/List';
 import { formatPrice, formatStock, markupPercent } from './format';
 import { CompetitorPrices, type RivalAccess } from './CompetitorPrices';
 import { PhotoEditor, PhotoGallery } from './ProductPhotos';
+import { ProductSuppliers } from './ProductSuppliers';
+import { RestockButton } from './Restock';
 import type { CatalogGroup } from './search';
 
 type Internal =
@@ -112,11 +114,13 @@ interface Props {
   editOrgId: string | null;
   /** Цены других магазинов: только своим (владелец, управляющий, бухгалтер, сотрудник зала); иначе null. */
   rivals: RivalAccess | null;
+  /** Магазин, если человек может отметить пустую полку (владелец, управляющий, сотрудник зала); иначе null. */
+  restockOrgId: string | null;
   onOpenGroup: (id: string) => void;
   onPhotosChange: (photos: ProductPhoto[]) => void;
 }
 
-export function ProductCard({ product, group, privileged, editOrgId, rivals, onOpenGroup, onPhotosChange }: Props) {
+export function ProductCard({ product, group, privileged, editOrgId, rivals, restockOrgId, onOpenGroup, onPhotosChange }: Props) {
   const t = ru.catalog.card;
   const stock = product.inStock === true ? ru.catalog.inStock : product.inStock === false ? ru.catalog.outOfStock : null;
   const unit = ru.catalog.units[product.unit] + (product.isWeighted ? `, ${t.weighted}` : '');
@@ -164,7 +168,11 @@ export function ProductCard({ product, group, privileged, editOrgId, rivals, onO
         />
       )}
 
+      {restockOrgId && <RestockButton key={product.id} orgId={restockOrgId} productId={product.id} />}
+
       {privileged && <InternalSections product={product} />}
+
+      {privileged && <ProductSuppliers key={product.id} product={product} editOrgId={editOrgId} />}
 
       {rivals && <CompetitorPrices key={`${rivals.orgId}:${rivals.viewerId ?? ''}`} product={product} access={rivals} />}
     </main>

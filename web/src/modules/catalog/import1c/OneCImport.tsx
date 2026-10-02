@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react';
 import type { CatalogProduct } from '../../../api/catalog';
 import { importCatalog, importInternals, importSales } from '../../../api/importCatalog';
+import { importSupplierPrices, realDataAllowed } from '../../../api/suppliers';
 import { ru } from '../../../shared/i18n/ru';
 import { Row, Section } from '../../../shared/ui/List';
 import { formatPeriod } from '../../../shared/date';
@@ -14,7 +15,7 @@ import { readReport, type FileResult } from './read';
 type State =
   | { kind: 'idle' }
   | { kind: 'reading' }
-  | { kind: 'confirm'; files: FileResult[]; plan: ImportPlan }
+  | { kind: 'confirm'; files: FileResult[]; plan: ImportPlan; realData: boolean }
   | { kind: 'running'; text: string }
   | { kind: 'done'; text: string }
   | { kind: 'error' };
@@ -40,10 +41,12 @@ export function OneCImport({ storeId, products, groups, canWriteInternals, refre
     const files: FileResult[] = [];
     for (const file of Array.from(list)) files.push(await readReport(file));
     const reports = files.flatMap((f): ParsedReport[] => (f.report ? [f.report] : []));
-    setState({ kind: 'confirm', files, plan: buildImportPlan(reports, products, groups) });
+    // Поставщики из 1С — только там, где разрешены настоящие данные (названия ИП — персональные данные).
+    const realData = canWriteInternals ? await realDataAllowed().catch(() => false) : false;
+    setState({ kind: 'confirm', files, plan: buildImportPlan(reports, products, groups), realData });
   };
 
-  const run = async (plan: ImportPlan) => {
+  const run = async (plan: ImportPlan, realData: boolean) => {
     const release = await keepAwake();
     try {
       setState({ kind: 'running', text: t.oneCProgressProducts(0, plan.products.length) });
@@ -65,7 +68,12 @@ export function OneCImport({ storeId, products, groups, canWriteInternals, refre
             setState({ kind: 'running', text: t.oneCProgressSales(done, total) }));
         }
       }
-      setState({ kind: 'done', text: t.oneCDone(plan.stats.created, plan.stats.changed, internals, sold) });
+      let suppliers = 0;
+      if (canWriteInternals && realData && plan.supplierPrices.length) {
+        suppliers = await importSupplierPrices(storeId, plan.supplierPrices, (done, total) =>
+          setState({ kind: 'running', text: t.oneCProgressSuppliers(done, total) }));
+      }
+      setState({ kind: 'done', text: t.oneCDone(plan.stats.created, plan.stats.changed, internals, sold, suppliers) });
       onImported();
     } catch {
       setState({ kind: 'error' });
@@ -110,9 +118,9 @@ export function OneCImport({ storeId, products, groups, canWriteInternals, refre
               tone={f.report ? 'default' : 'muted'}
             />
           ))}
-          <PlanSummary plan={state.plan} canWriteInternals={canWriteInternals} />
-          {hasWork(state.plan, canWriteInternals) ? (
-            <Row title={t.oneCConfirm} tone="link" onClick={() => void run(state.plan)} />
+          <PlanSummary plan={state.plan} canWriteInternals={canWriteInternals} realData={state.realData} />
+          {hasWork(state.plan, canWriteInternals, state.realData) ? (
+            <Row title={t.oneCConfirm} tone="link" onClick={() => void run(state.plan, state.realData)} />
           ) : null}
           <Row title={t.cancel} tone="muted" onClick={() => setState({ kind: 'idle' })} />
         </>
@@ -134,15 +142,19 @@ export function OneCImport({ storeId, products, groups, canWriteInternals, refre
 }
 
 const salesRows = (plan: ImportPlan) => plan.sales.reduce((n, s) => n + s.rows.length, 0);
-const hasWork = (plan: ImportPlan, canWriteInternals: boolean) =>
-  plan.products.length > 0 || (canWriteInternals && (plan.internals.length > 0 || salesRows(plan) > 0));
+const hasWork = (plan: ImportPlan, canWriteInternals: boolean, realData: boolean) =>
+  plan.products.length > 0 || (canWriteInternals && (plan.internals.length > 0 || salesRows(plan) > 0
+    || (realData && plan.supplierPrices.length > 0)));
 
-function PlanSummary({ plan, canWriteInternals }: { plan: ImportPlan; canWriteInternals: boolean }) {
+function PlanSummary({ plan, canWriteInternals, realData }: { plan: ImportPlan; canWriteInternals: boolean; realData: boolean }) {
   const t = ru.catalog.import;
   const closed = plan.internals.length > 0 || salesRows(plan) > 0;
   return (
     <>
-      <Row title={hasWork(plan, canWriteInternals) ? t.oneCPlan(plan.stats.created, plan.stats.changed) : t.oneCNothing} tone="muted" />
+      <Row title={hasWork(plan, canWriteInternals, realData) ? t.oneCPlan(plan.stats.created, plan.stats.changed) : t.oneCNothing} tone="muted" />
+      {canWriteInternals && plan.supplierPrices.length > 0 && (
+        <Row title={realData ? t.oneCSupplierPrices(plan.supplierPrices.length) : t.oneCSuppliersBlocked} tone="muted" />
+      )}
       {plan.internals.length > 0 && canWriteInternals && <Row title={t.oneCInternals(plan.internals.length)} tone="muted" />}
       {canWriteInternals && plan.sales.map((s) => (
         <Row key={`${s.from}:${s.to}`} title={t.oneCSales(formatPeriod(s.from, s.to), s.rows.length)} tone="muted" />

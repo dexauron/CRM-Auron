@@ -194,6 +194,44 @@ export const ru = {
       next: 'Следующие товары',
       refresh: 'Обновить проверку',
     },
+    restock: {
+      title: 'Закончилось на полке',
+      hint: 'Пустые полки — по поставщикам',
+      mark: 'Закончилось на полке',
+      markFooter: 'Полка пустая? Отметьте — товар попадёт в общий список для заказа.',
+      marked: 'В списке «Закончилось»',
+      unmark: 'Убрать из списка',
+      markedFooter: 'Товар в общем списке «Закончилось на полке»: его видят владелец, управляющий и сотрудники.',
+      loading: 'Загружаю список…',
+      error: 'Не удалось загрузить список. Нажмите, чтобы повторить.',
+      noAccess: 'Список недоступен',
+      denied: 'Список видят владелец, управляющий и сотрудники зала. Владельцу и управляющему нужен вход с кодом из аутентификатора.',
+      empty: 'Список пуст. Откройте товар и нажмите «Закончилось на полке».',
+      noSupplier: 'Поставщик не указан',
+      ordered: (date: string) => `заказано ${date}`,
+      waiting: (n: number) => `Ждут заказа: ${n.toLocaleString('ru-RU')}`,
+      markOrdered: 'Отметить заказанным',
+      share: 'Поделиться списком',
+      copied: 'Список скопирован — отправьте его в мессенджер',
+      shareTitle: 'Закончилось на полке:',
+      footer: 'Список общий для магазина. Заказанное остаётся серым 14 дней. Поставщик берётся из раздела «Поставщики товара» в карточке.',
+      failed: 'Не удалось сохранить. Нужен интернет; если ошибка повторяется, сообщите владельцу.',
+    },
+    productSuppliers: {
+      title: 'Поставщики товара',
+      footer: 'Цены поставщиков приходят из «Цен поставщиков» 1С. По поставщику список «Закончилось» раскладывается по заказам.',
+      loading: 'Загружаю поставщиков…',
+      error: 'Не удалось загрузить поставщиков товара. Нажмите, чтобы повторить.',
+      empty: 'Поставщик не указан',
+      add: 'Указать поставщика',
+      choose: 'Поставщик',
+      pick: 'Выберите поставщика',
+      noSuppliers: 'Сначала добавьте поставщика в разделе «Поставщики»',
+      remove: 'Убрать',
+      price: (price: string, date: string | null) => (date ? `${price} · цена от ${date}` : price),
+      noPrice: 'Без цены — указан вручную',
+      failed: 'Не удалось сохранить',
+    },
     card: {
       rivals: {
         title: 'Цены в других магазинах',
@@ -318,10 +356,15 @@ export const ru = {
         `Закупка и остатки: ${done.toLocaleString('ru-RU')} из ${total.toLocaleString('ru-RU')}`,
       oneCProgressSales: (done: number, total: number) =>
         `Продажи: ${done.toLocaleString('ru-RU')} из ${total.toLocaleString('ru-RU')}`,
-      oneCDone: (created: number, changed: number, internals: number, sold: number) =>
+      oneCProgressSuppliers: (done: number, total: number) =>
+        `Цены поставщиков: ${done.toLocaleString('ru-RU')} из ${total.toLocaleString('ru-RU')}`,
+      oneCSupplierPrices: (n: number) => `Цены поставщиков — строк: ${n.toLocaleString('ru-RU')}`,
+      oneCSuppliersBlocked: 'Поставщики и их цены из 1С загружаются только на сервере в РФ (152-ФЗ)',
+      oneCDone: (created: number, changed: number, internals: number, sold: number, suppliers = 0) =>
         `Готово: новых ${created.toLocaleString('ru-RU')}, обновлено ${changed.toLocaleString('ru-RU')}` +
         (internals ? `, закупка и остатки — ${internals.toLocaleString('ru-RU')}` : '') +
-        (sold ? `, продажи — ${sold.toLocaleString('ru-RU')}` : ''),
+        (sold ? `, продажи — ${sold.toLocaleString('ru-RU')}` : '') +
+        (suppliers ? `, цены поставщиков — ${suppliers.toLocaleString('ru-RU')}` : ''),
       oneCFooter: 'Файлы Excel из 1С (.xlsx, .xls): цены поставщиков, штрихкоды, остатки, прайс-лист, продажи за период — можно сразу несколько. Тип отчёта узнаётся сам. Товары находятся по коду, штрихкоду и названию; повторная загрузка не задваивает.',
       photos: 'Перенести фото из старого каталога',
       photosPlanning: 'Смотрю, каких фото не хватает…',

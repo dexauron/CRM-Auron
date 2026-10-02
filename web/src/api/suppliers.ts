@@ -160,3 +160,55 @@ export function matchSupplier(s: Supplier, query: string): boolean {
 
 /** Ссылка WhatsApp для номера +7XXXXXXXXXX. */
 export const whatsappUrl = (phone: string) => `https://wa.me/${phone.replace(/\D/g, '')}`;
+
+/** Поставщик товара: закупка за штуку или кг (копейки) и дата цены; без цены — привязан вручную. */
+export interface ProductSupplier {
+  supplierId: string;
+  name: string;
+  price: number | null;
+  priceDate: string | null;
+}
+
+export async function loadProductSuppliers(productId: string): Promise<ProductSupplier[]> {
+  const { data, error } = await api().from('product_suppliers')
+    .select('supplier_id, price, price_date, suppliers(name, deleted_at)').eq('product_id', productId);
+  if (error) fail(error);
+  return (data ?? []).flatMap((row: unknown): ProductSupplier[] => {
+    if (!record(row) || typeof row.supplier_id !== 'string' || !record(row.suppliers) || typeof row.suppliers.name !== 'string'
+      || !(row.price === null || typeof row.price === 'number') || !text(row.price_date)) return invalid();
+    if (row.suppliers.deleted_at !== null) return [];
+    return [{ supplierId: row.supplier_id, name: row.suppliers.name, price: row.price as number | null, priceDate: row.price_date }];
+  }).sort((a, b) => (b.priceDate ?? '').localeCompare(a.priceDate ?? '') || a.name.localeCompare(b.name, 'ru'));
+}
+
+export async function linkProductSupplier(orgId: string, productId: string, supplierId: string): Promise<void> {
+  const { error } = await api().from('product_suppliers').insert({ org_id: orgId, product_id: productId, supplier_id: supplierId });
+  if (error && error.code !== '23505') fail(error);
+}
+
+export async function unlinkProductSupplier(productId: string, supplierId: string): Promise<void> {
+  const { data, error } = await api().from('product_suppliers').delete().eq('product_id', productId).eq('supplier_id', supplierId).select('supplier_id');
+  if (error) fail(error);
+  if (!data?.length) throw new SuppliersError('forbidden');
+}
+
+/** Цена поставщика из 1С: копейки за штуку или кг. */
+export interface SupplierPriceRow {
+  product_id: string;
+  supplier: string;
+  price: number | null;
+  price_date: string | null;
+}
+
+export async function importSupplierPrices(
+  orgId: string, rows: SupplierPriceRow[], onProgress: (done: number, total: number) => void,
+): Promise<number> {
+  let changed = 0;
+  for (let i = 0; i < rows.length; i += 1000) {
+    const { data, error } = await api().rpc('import_supplier_prices', { p_org: orgId, p_rows: rows.slice(i, i + 1000) });
+    if (error) fail(error);
+    if (record(data) && typeof data.changed === 'number') changed += data.changed;
+    onProgress(Math.min(i + 1000, rows.length), rows.length);
+  }
+  return changed;
+}
