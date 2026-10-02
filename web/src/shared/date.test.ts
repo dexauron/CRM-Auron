@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatDate, formatDay, formatPeriod, formatShortDateTime } from './date';
+import { formatDate, formatDay, formatPeriod, formatShortDateTime, todayIso } from './date';
 
 describe('formatShortDateTime', () => {
   it('показывает время магазина (UTC+3)', () => {
@@ -32,5 +32,12 @@ describe('formatPeriod', () => {
   it('период и один день', () => {
     expect(formatPeriod('2026-09-01', '2026-09-30')).toBe('01.09.2026 – 30.09.2026');
     expect(formatPeriod('2026-09-05', '2026-09-05')).toBe('05.09.2026');
+  });
+});
+
+describe('todayIso', () => {
+  it('сегодня по времени магазина: в 22:30 UTC в Грозном уже следующий день', () => {
+    expect(todayIso(new Date('2026-10-01T22:30:00Z'))).toBe('2026-10-02');
+    expect(todayIso(new Date('2026-10-01T20:59:00Z'))).toBe('2026-10-01');
   });
 });

@@ -36,6 +36,11 @@ export function App() {
   // Магазины, где у человека есть одна из ролей (только после второго фактора — без него сервер прав не даст).
   const orgsWithRole = (roles: readonly string[]) =>
     ready?.secondFactor === 'ok' ? (me?.memberships ?? []).filter((m) => roles.includes(m.role)).map((m) => m.orgId) : [];
+  // То же правило, что на сервере: владельцу, управляющему и бухгалтеру нужен второй фактор, сотруднику зала — нет.
+  const orgsWithAccess = (roles: readonly string[]) =>
+    (me?.memberships ?? [])
+      .filter((m) => roles.includes(m.role) && (m.role === 'staff' || ready?.secondFactor === 'ok'))
+      .map((m) => m.orgId);
   const {
     needRefresh: [needRefresh, setNeedRefresh],
     updateServiceWorker,
@@ -146,6 +151,8 @@ export function App() {
           editableOrgIds={orgsWithRole(['owner', 'manager'])}
           privilegedOrgIds={orgsWithRole(['owner', 'manager', 'accountant'])}
           ownerOrgIds={orgsWithRole(['owner'])}
+          rivalReaderOrgIds={orgsWithAccess(['owner', 'manager', 'accountant', 'staff'])}
+          rivalWriterOrgIds={orgsWithAccess(['owner', 'manager', 'staff'])}
           groupId={screen.groupId}
           productId={screen.productId}
           tools={screen.tools}

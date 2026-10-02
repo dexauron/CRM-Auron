@@ -5,7 +5,7 @@ const { rpc, abortSignal } = vi.hoisted(() => ({ rpc: vi.fn(), abortSignal: vi.f
 vi.mock('./client', () => ({ api: () => ({ rpc }) }));
 const row = { id: 'p1', name: 'Тест', cash_code: '001', unit: 'pcs', retail_price: '9900', purchase_price: '10000', barcode: null, barcode_count: null };
 const report = {
-  counts: { missing_price: 0, below_cost: 1, no_markup: 0, low_markup: 0, duplicate_barcodes: 0, price_rise: 0, bestsellers: 0 },
+  counts: { missing_price: 0, below_cost: 1, no_markup: 0, low_markup: 0, duplicate_barcodes: 0, price_rise: 0, bestsellers: 0, competitor_cheaper: 0 },
   total: 1, items: [row],
 };
 
@@ -43,6 +43,13 @@ describe('КАТ-6: ответ сервера', () => {
       items: [{ ...row, qty: '3.500', amount: '110000' }] });
     expect(result.salesPeriod).toEqual({ from: '2026-09-01', to: '2026-09-30' });
     expect(result.items[0]).toMatchObject({ qty: 3.5, amount: 110000n, priceKind: null, oldPrice: null });
+  });
+  it('«Дешевле у конкурентов»: магазин, его цена и день записи', () => {
+    const item = parseCatalogIssues({ ...report, items: [{ ...row, rival: 'Магнит', rival_price: '8500', observed_on: '2026-10-01' }] }).items[0];
+    expect(item).toMatchObject({ rival: 'Магнит', rivalPrice: 8500n, observedOn: '2026-10-01' });
+  });
+  it.each([{ rival: 5 }, { rival_price: '-5' }, { observed_on: '01.10.2026' }])('отклоняет неверную запись конкурента %o', (extra) => {
+    expect(() => parseCatalogIssues({ ...report, items: [{ ...row, ...extra }] })).toThrow(CatalogToolsError);
   });
   it('старый ответ без новых полей читается как null', () => {
     const result = parseCatalogIssues(report);
