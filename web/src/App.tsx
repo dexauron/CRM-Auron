@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import { checkServer, isServerConfigured, type ServerStatus } from './api/client';
 import { Account } from './modules/common/Account';
+import { SecondFactor } from './modules/common/SecondFactor';
 import { useAccount } from './modules/common/useAccount';
 import { Team } from './modules/staff/Team';
 import { ru } from './shared/i18n/ru';
@@ -24,8 +25,10 @@ export function App() {
   const [server, setServer] = useState<ServerStatus | 'checking'>('checking');
   const [online, setOnline] = useState(() => navigator.onLine);
   const account = useAccount(telegram, isServerConfigured);
-  const me = account.state.kind === 'ready' ? account.state.me : null;
-  const ownerOf = me?.memberships.find((m) => m.role === 'owner');
+  const ready = account.state.kind === 'ready' ? account.state : null;
+  const me = ready?.me ?? null;
+  // Права владельца действуют только после кода из аутентификатора — до этого экран команды не нужен.
+  const ownerOf = ready?.secondFactor === 'ok' ? me?.memberships.find((m) => m.role === 'owner') : undefined;
   const {
     needRefresh: [needRefresh, setNeedRefresh],
     updateServiceWorker,
@@ -97,6 +100,7 @@ export function App() {
 
       <main>
         {isServerConfigured && <Account state={account.state} inTelegram={Boolean(telegram)} onRetry={account.retry} />}
+        {ready && ready.secondFactor !== 'ok' && <SecondFactor mode={ready.secondFactor} onDone={account.retry} />}
         {me && ownerOf && (
           <Team orgId={ownerOf.orgId} orgName={ownerOf.orgName} selfId={me.userId} telegram={telegram ?? null} />
         )}

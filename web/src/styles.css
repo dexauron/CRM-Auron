@@ -464,6 +464,51 @@ select {
   color: var(--text);
 }
 
+/* ── Второй фактор ────────────────────────────────────────── */
+
+.qr {
+  display: flex;
+  justify-content: center;
+  padding: 20px 16px;
+}
+
+.qr img {
+  padding: 10px;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.secret {
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 15px;
+  letter-spacing: 0.04em;
+}
+
+.code-field {
+  width: 100%;
+  padding: 6px 0;
+  border: 0;
+  background: none;
+  font-size: 28px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.3em;
+  text-align: center;
+}
+
+.code-field::placeholder {
+  color: var(--separator);
+}
+
+.code-field:focus {
+  outline: none;
+}
+
+a.row {
+  color: var(--link);
+  text-decoration: none;
+}
+
 /* ── Уведомления и ожидание ───────────────────────────────── */
 
 .notice {

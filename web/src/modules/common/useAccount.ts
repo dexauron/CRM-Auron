@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   acceptInvite,
+  privilegedRoles,
   currentSession,
   loadMe,
   sessionTelegramId,
@@ -12,6 +13,7 @@ import {
   type Me,
   type SignInError,
 } from '../../api/auth';
+import { secondFactorState, type SecondFactorState } from '../../api/mfa';
 import { parseInviteParam } from '../../shared/invite';
 import type { TelegramWebApp } from '../../shared/telegram';
 
@@ -19,7 +21,13 @@ export type AccountState =
   | { kind: 'loading' }
   | { kind: 'guest' }
   | { kind: 'error'; code: SignInError }
-  | { kind: 'ready'; me: Me; invite: InviteResult | null };
+  | { kind: 'ready'; me: Me; invite: InviteResult | null; secondFactor: SecondFactorState };
+
+// Владельцу, управляющему и бухгалтеру нужен код из приложения-аутентификатора; остальным — нет.
+async function withSecondFactor(me: Me, invite: InviteResult | null): Promise<AccountState> {
+  const privileged = me.memberships.some((m) => privilegedRoles.includes(m.role));
+  return { kind: 'ready', me, invite, secondFactor: privileged ? await secondFactorState() : 'ok' };
+}
 
 // Telegram повторяет start_param при каждой перезагрузке страницы: приглашение принимаем один раз за запуск.
 async function acceptOnce(token: string): Promise<InviteResult | null> {
@@ -48,15 +56,17 @@ async function establish(telegram: TelegramWebApp | null): Promise<AccountState>
   if (!session) return { kind: 'guest' };
   const token = telegram ? parseInviteParam(telegram.initDataUnsafe.start_param) : null;
   const invite = token ? await acceptOnce(token) : null;
+  let me: Me;
   try {
-    return { kind: 'ready', me: await loadMe(session.user.id), invite };
+    me = await loadMe(session.user.id);
   } catch (error) {
     // Сессию могли закрыть на сервере (например, после отключения доступа) — в Telegram входим заново.
     if (!telegram) throw error;
     session = await signIn();
     if (!session) return { kind: 'guest' };
-    return { kind: 'ready', me: await loadMe(session.user.id), invite };
+    me = await loadMe(session.user.id);
   }
+  return withSecondFactor(me, invite);
 }
 
 /** telegram: undefined — ещё выясняем, открыто ли приложение из Telegram; enabled — настроен ли сервер. */
