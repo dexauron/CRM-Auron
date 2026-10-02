@@ -29,6 +29,7 @@ const paths = {
   ),
   warning: <path d="M12 9.5v4M12 17h.01M10.3 4.2 2.6 17.6A2 2 0 0 0 4.3 20.6h15.4a2 2 0 0 0 1.7-3L13.7 4.2a2 2 0 0 0-3.4 0z" />,
   refresh: <path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3M19.5 4v4.5H15" />,
+  shield: <path d="M12 3.5l7 2.6v5.4c0 4.3-2.9 7.6-7 9-4.1-1.4-7-4.7-7-9V6.1zM9 12l2.2 2.2L15.5 10" />,
 } satisfies Record<string, ReactElement>;
 
 export type IconName = keyof typeof paths;

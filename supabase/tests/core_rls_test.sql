@@ -15,7 +15,7 @@ begin
   insert into public.memberships (org_id, user_id, role) values (org_a, c, 'customer'), (org_b, x, 'owner');
 
   perform set_config('role', 'authenticated', true);
-  perform set_config('request.jwt.claims', json_build_object('sub', o, 'role', 'authenticated')::text, true);
+  perform set_config('request.jwt.claims', json_build_object('sub', o, 'role', 'authenticated', 'aal', 'aal2')::text, true);
   tok := public.create_invite(org_a, 'staff', 24);
   log := log || ('01 invite token len=' || length(tok));
   begin perform public.create_invite(org_a, 'owner', 24); log := log || '02 FAIL invite owner allowed'::text;
@@ -23,7 +23,7 @@ begin
   begin perform token_hash from public.invites limit 1; log := log || '03 FAIL token_hash readable'::text;
   exception when others then log := log || ('03 ok token_hash hidden: ' || sqlerrm); end;
 
-  perform set_config('request.jwt.claims', json_build_object('sub', s, 'role', 'authenticated')::text, true);
+  perform set_config('request.jwt.claims', json_build_object('sub', s, 'role', 'authenticated', 'aal', 'aal2')::text, true);
   perform public.accept_invite(tok);
   select count(*) into n from public.memberships; log := log || ('04 staff sees memberships=' || n || ' (1)');
   begin perform public.accept_invite(tok); log := log || '05 FAIL invite reused'::text;
@@ -38,7 +38,7 @@ begin
   log := log || ('10 staff updated own name rows=' || n || ' (1)');
   select count(*) into n from public.audit_log; log := log || ('11 staff sees audit=' || n || ' (0)');
 
-  perform set_config('request.jwt.claims', json_build_object('sub', c, 'role', 'authenticated')::text, true);
+  perform set_config('request.jwt.claims', json_build_object('sub', c, 'role', 'authenticated', 'aal', 'aal2')::text, true);
   select count(*) into n from public.settings; log := log || ('12 customer sees settings=' || n || ' (0)');
   select count(*) into n from public.profiles; log := log || ('13 customer sees profiles=' || n || ' (1)');
   insert into public.consents (org_id, user_id, kind, text_version) values (org_a, c, 'marketing', 'v1');
@@ -50,13 +50,13 @@ begin
   update public.consents set revoked_at = null where user_id = c; get diagnostics n = row_count;
   log := log || ('17 un-revoke rows=' || n || ' (0)');
 
-  perform set_config('request.jwt.claims', json_build_object('sub', x, 'role', 'authenticated')::text, true);
+  perform set_config('request.jwt.claims', json_build_object('sub', x, 'role', 'authenticated', 'aal', 'aal2')::text, true);
   select count(*) into n from public.organizations; log := log || ('18 outsider sees orgs=' || n || ' (1)');
   select count(*) into n from public.memberships where org_id = org_a; log := log || ('19 outsider sees A memberships=' || n || ' (0)');
   begin perform public.create_invite(org_a, 'staff', 24); log := log || '20 FAIL outsider created invite'::text;
   exception when others then log := log || ('20 ok outsider invite denied: ' || sqlerrm); end;
 
-  perform set_config('request.jwt.claims', json_build_object('sub', o, 'role', 'authenticated')::text, true);
+  perform set_config('request.jwt.claims', json_build_object('sub', o, 'role', 'authenticated', 'aal', 'aal2')::text, true);
   select count(*) into n from public.profiles; log := log || ('21 owner sees profiles=' || n || ' (3)');
   select count(*) into n from public.memberships; log := log || ('22 owner sees memberships=' || n || ' (3)');
   select count(*) into n from public.audit_log where org_id = org_a; log := log || ('23 owner sees audit rows=' || n || ' (>0)');
@@ -65,7 +65,7 @@ begin
   begin perform public.set_member_status(m_o, 'disabled'); log := log || '24 FAIL last owner disabled'::text;
   exception when others then log := log || ('24 ok last owner protected: ' || sqlerrm); end;
 
-  perform set_config('request.jwt.claims', json_build_object('sub', s, 'role', 'authenticated')::text, true);
+  perform set_config('request.jwt.claims', json_build_object('sub', s, 'role', 'authenticated', 'aal', 'aal2')::text, true);
   select count(*) into n from public.organizations; log := log || ('25 disabled staff sees orgs=' || n || ' (0)');
 
   perform set_config('role', 'anon', true);

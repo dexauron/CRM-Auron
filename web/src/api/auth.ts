@@ -8,6 +8,8 @@ const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
 export const roles = ['owner', 'manager', 'accountant', 'staff', 'supplier', 'customer'] as const;
 export type Role = (typeof roles)[number];
+/** Роли, которым нужен второй фактор (код из приложения-аутентификатора). */
+export const privilegedRoles: readonly Role[] = ['owner', 'manager', 'accountant'];
 
 export interface Membership {
   orgId: string;
