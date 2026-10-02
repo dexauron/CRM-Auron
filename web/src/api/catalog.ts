@@ -124,3 +124,10 @@ export async function loadPriceHistory(productId: string, limit = 20): Promise<P
       : [],
   );
 }
+
+/** Версия каталога: меняется при любой правке. null — каталог закрыт или магазина нет. */
+export async function loadCatalogVersion(orgId: string): Promise<string | null> {
+  const { data, error } = await api().rpc('catalog_version', { p_org: orgId });
+  if (error) throw new Error('Не удалось проверить каталог');
+  return typeof data === 'string' && data ? data : null;
+}

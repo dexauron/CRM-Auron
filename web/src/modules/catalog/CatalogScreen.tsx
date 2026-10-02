@@ -1,9 +1,10 @@
 // Каталог (КАТ-1…КАТ-4): поиск как в iOS, сканер штрихкода, группы, товары с ценой и наличием, карточка. Открыт и гостю.
 import { useDeferredValue, useEffect, useMemo, useState } from 'react';
-import { loadCatalog, loadStore, type CatalogProduct, type Store } from '../../api/catalog';
+import { loadCatalog, loadCatalogVersion, loadStore, type CatalogProduct, type Store } from '../../api/catalog';
 import { importCatalog, type ImportTotals } from '../../api/importCatalog';
 import { findByBarcode } from '../../shared/barcode';
 import { STORE_SLUG } from '../../shared/config';
+import { formatShortDateTime } from '../../shared/date';
 import { ru } from '../../shared/i18n/ru';
 import { Icon } from '../../shared/ui/icons';
 import { LargeTitle } from '../../shared/ui/LargeTitle';
@@ -11,6 +12,7 @@ import { Scanner } from '../../shared/ui/Scanner';
 import { scannerSupported } from '../../shared/scanner';
 import { Row, Section } from '../../shared/ui/List';
 import { formatPrice } from './format';
+import { clearCatalog, readCachedCatalog, saveCatalog } from './catalogCache';
 import { fetchOldCatalog } from './oldCatalog';
 import { ProductCard } from './ProductCard';
 import { CatalogSearch, type CatalogGroup } from './search';
@@ -19,7 +21,10 @@ type Load =
   | { kind: 'loading' }
   | { kind: 'missing' }
   | { kind: 'error' }
-  | { kind: 'ready'; store: Store; groups: CatalogGroup[]; products: CatalogProduct[] };
+  | { kind: 'ready'; store: Store; groups: CatalogGroup[]; products: CatalogProduct[]; savedAt: string };
+
+/** Свежесть показанного каталога: проверяем версию на сервере, свежий, или сети нет — показан сохранённый. */
+type Sync = 'checking' | 'fresh' | 'offline';
 
 type ImportState =
   | { kind: 'idle' }
@@ -111,34 +116,60 @@ interface Props {
 export function CatalogScreen({ groupId, productId, onOpenGroup, onOpenProduct, onBack, editableOrgIds, privilegedOrgIds }: Props) {
   const [reload, setReload] = useState(0);
   const [load, setLoad] = useState<Load>({ kind: 'loading' });
+  const [sync, setSync] = useState<Sync>('checking');
   const [query, setQuery] = useState('');
   const [limit, setLimit] = useState(PAGE);
   const [scanning, setScanning] = useState(false);
   const deferredQuery = useDeferredValue(query);
 
+  // Сначала каталог с устройства (сразу и без сети), потом сверка версии; скачиваем заново, только если изменился.
   useEffect(() => {
     let active = true;
-    (async () => {
-      const store = await loadStore(STORE_SLUG);
-      if (!store) return { kind: 'missing' } as const;
-      return { kind: 'ready', store, ...(await loadCatalog(store.id)) } as const;
-    })().then(
-      (next) => active && setLoad(next),
-      () => active && setLoad({ kind: 'error' }),
-    );
+    void (async () => {
+      const cached = await readCachedCatalog(STORE_SLUG);
+      if (!active) return;
+      if (cached) {
+        const { store, groups, products, savedAt } = cached;
+        setLoad({ kind: 'ready', store, groups, products, savedAt });
+      }
+      setSync('checking');
+      try {
+        const store = await loadStore(STORE_SLUG);
+        if (!active) return;
+        if (!store) {
+          void clearCatalog(STORE_SLUG);
+          return setLoad({ kind: 'missing' });
+        }
+        const version = await loadCatalogVersion(store.id);
+        if (!active) return;
+        if (cached && version && cached.version === version && cached.store.id === store.id) return setSync('fresh');
+        const data = await loadCatalog(store.id);
+        if (!active) return;
+        const savedAt = new Date().toISOString();
+        if (version) void saveCatalog(STORE_SLUG, { version, savedAt, store, ...data });
+        setLoad({ kind: 'ready', store, ...data, savedAt });
+        setSync('fresh');
+      } catch {
+        if (!active) return;
+        if (cached) setSync('offline');
+        else setLoad({ kind: 'error' });
+      }
+    })();
     return () => {
       active = false;
     };
   }, [reload]);
 
   const ready = load.kind === 'ready' ? load : null;
-  const engine = useMemo(() => (ready ? new CatalogSearch(ready.products, ready.groups) : null), [ready]);
-  const byId = useMemo(() => new Map((ready?.products ?? []).map((p) => [p.id, p])), [ready]);
+  const products = ready?.products;
+  const groups = ready?.groups;
+  const engine = useMemo(() => (products && groups ? new CatalogSearch(products, groups) : null), [products, groups]);
+  const byId = useMemo(() => new Map((products ?? []).map((p) => [p.id, p])), [products]);
   const counts = useMemo(() => {
     const map = new Map<string, number>();
-    for (const p of ready?.products ?? []) if (p.groupId) map.set(p.groupId, (map.get(p.groupId) ?? 0) + 1);
+    for (const p of products ?? []) if (p.groupId) map.set(p.groupId, (map.get(p.groupId) ?? 0) + 1);
     return map;
-  }, [ready]);
+  }, [products]);
 
   const results = useMemo(() => {
     if (!ready || !engine) return [];
@@ -162,6 +193,14 @@ export function CatalogScreen({ groupId, productId, onOpenGroup, onOpenProduct, 
   const back = { label: group ? ru.catalog.title : ru.appName, onClick: onBack };
   const showGroups = ready && !query.trim() && !groupId;
 
+  // Состояние связи — только когда что-то не так: сети нет, показан каталог с устройства.
+  const offlineNotice = sync === 'offline' && ready && (
+    <p className="notice tone-warn" role="status">
+      <Icon name="warning" />
+      {ru.catalog.offline(formatShortDateTime(ready.savedAt))}
+    </p>
+  );
+
   if (productId) {
     const product = byId.get(productId) ?? null;
     const productGroup = product?.groupId ? (ready?.groups.find((g) => g.id === product.groupId) ?? null) : null;
@@ -171,6 +210,7 @@ export function CatalogScreen({ groupId, productId, onOpenGroup, onOpenProduct, 
           title={product?.name ?? ru.catalog.title}
           back={{ label: group && !query.trim() ? group.name : ru.catalog.title, onClick: onBack }}
         />
+        {offlineNotice}
         {load.kind === 'loading' && (
           <Section>
             <Row leading={<span className="spinner" />} title={ru.catalog.card.loading} tone="muted" />
@@ -236,6 +276,7 @@ export function CatalogScreen({ groupId, productId, onOpenGroup, onOpenProduct, 
       {scanning && <Scanner onCode={onScanned} onClose={() => setScanning(false)} />}
 
       <main>
+        {offlineNotice}
         {load.kind === 'loading' && (
           <Section>
             <Row leading={<span className="spinner" />} title={ru.catalog.loading} tone="muted" />
