@@ -88,13 +88,37 @@ async function findOrCreateUser(admin: SupabaseClient, tg: TelegramUser): Promis
   return userId;
 }
 
+// Почему подпись не сошлась: токен с лишними символами, отозван или от другого бота. Сам токен в журнал не пишется.
+// Проверяется один раз на запуск функции, чтобы не обращаться к Telegram на каждую неудачную попытку.
+let tokenDiagnosed = false;
+async function diagnoseToken(botToken: string): Promise<void> {
+  if (tokenDiagnosed) return;
+  tokenDiagnosed = true;
+  if (!/^\d+:[A-Za-z0-9_-]{30,}$/.test(botToken)) {
+    console.warn('auth-telegram: секрет TELEGRAM_BOT_TOKEN не похож на токен бота (лишние символы или не то значение)');
+    return;
+  }
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${botToken}/getMe`, { signal: AbortSignal.timeout(3000) });
+    const body = (await response.json()) as { ok?: boolean; result?: { username?: string } };
+    console.warn(
+      body.ok
+        ? `auth-telegram: токен действует для @${body.result?.username ?? '?'} — проверьте, что приложение открыто из этого бота`
+        : `auth-telegram: Telegram не принял токен (${response.status}) — вероятно, он отозван; положите в секрет новый`,
+    );
+  } catch {
+    console.warn('auth-telegram: не удалось проверить токен у Telegram');
+  }
+}
+
 Deno.serve(async (req) => {
   const origin = req.headers.get('Origin');
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders(origin) });
   if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405, origin);
   if (origin && !ALLOWED_ORIGINS.includes(origin)) return json({ error: 'origin_not_allowed' }, 403, origin);
 
-  const botToken = Deno.env.get('TELEGRAM_BOT_TOKEN');
+  // trim: при вставке в настройки к токену легко прилипает пробел или перевод строки.
+  const botToken = Deno.env.get('TELEGRAM_BOT_TOKEN')?.trim();
   if (!botToken) {
     console.error('auth-telegram: не задан секрет TELEGRAM_BOT_TOKEN');
     return json({ error: 'server_not_configured' }, 500, origin);
@@ -111,7 +135,11 @@ Deno.serve(async (req) => {
   try {
     verified = await verifyInitData(String(initData ?? ''), botToken);
   } catch (e) {
-    if (e instanceof InitDataInvalid) return json({ error: e.code }, 401, origin);
+    if (e instanceof InitDataInvalid) {
+      console.warn(`auth-telegram: 401 ${e.code}`);
+      if (e.code === 'bad_signature') await diagnoseToken(botToken);
+      return json({ error: e.code }, 401, origin);
+    }
     throw e;
   }
 
