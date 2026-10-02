@@ -70,8 +70,9 @@ begin
 
   perform set_config('role', 'anon', true);
   perform set_config('request.jwt.claims', json_build_object('role', 'anon')::text, true);
-  begin perform 1 from public.organizations limit 1; log := log || '26 FAIL anon read orgs'::text;
-  exception when others then log := log || ('26 ok anon denied: ' || sqlerrm); end;
+  -- Гость видит только магазины с открытым каталогом (миграция catalog); здесь таких нет.
+  select count(*) into n from public.organizations;
+  log := log || (case when n = 0 then '26 ok anon sees no closed orgs' else '26 FAIL anon read closed orgs' end);
   begin perform public.accept_invite('x'); log := log || '27 FAIL anon called rpc'::text;
   exception when others then log := log || ('27 ok anon rpc denied: ' || sqlerrm); end;
 
