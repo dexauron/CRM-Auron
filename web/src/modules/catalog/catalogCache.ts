@@ -5,7 +5,7 @@ import { readOffline, writeOffline } from '../../shared/offline';
 import type { CatalogGroup } from './search';
 
 /** Меняется, когда меняется формат сохранённых данных: старые записи тогда не читаются. */
-const SCHEMA = 2;
+const SCHEMA = 3;
 
 export interface CachedCatalog {
   schema: typeof SCHEMA;

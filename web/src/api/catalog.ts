@@ -8,13 +8,19 @@ export interface Store {
   name: string;
 }
 
+/** Фото товара: путь в Storage и источник (null — снято в магазине). */
+export interface ProductPhoto {
+  path: string;
+  source: 'openfoodfacts' | null;
+}
+
 export interface CatalogProduct extends CatalogItem {
   retailPrice: number | null;
   inStock: boolean | null;
   arrivalOn: string | null;
   unit: 'pcs' | 'kg';
-  /** Пути фото в Storage по порядку; адрес — photoUrl из api/photos. */
-  photos: string[];
+  /** Фото по порядку; адрес — photoUrl из api/photos. */
+  photos: ProductPhoto[];
 }
 
 const PAGE = 1000;
@@ -28,9 +34,13 @@ export function parseProduct(row: unknown): CatalogProduct | null {
     : [];
   const photos = Array.isArray(row.product_photos)
     ? (row.product_photos as unknown[])
-        .flatMap((f) => (isRecord(f) && typeof f.path === 'string' ? [{ path: f.path, sort: typeof f.sort === 'number' ? f.sort : 0 }] : []))
+        .flatMap((f) =>
+          isRecord(f) && typeof f.path === 'string'
+            ? [{ path: f.path, sort: typeof f.sort === 'number' ? f.sort : 0, source: f.source === 'openfoodfacts' ? ('openfoodfacts' as const) : null }]
+            : [],
+        )
         .sort((a, b) => a.sort - b.sort || a.path.localeCompare(b.path))
-        .map((f) => f.path)
+        .map(({ path, source }) => ({ path, source }))
     : [];
   return {
     id: row.id,
@@ -74,7 +84,7 @@ export async function loadCatalog(orgId: string): Promise<{ groups: CatalogGroup
         const res = await api()
           .from('products')
           .select(
-            'id, group_id, name, cash_code, article, unit, is_weighted, retail_price, in_stock, arrival_on, product_barcodes(barcode), product_photos(path, sort)',
+            'id, group_id, name, cash_code, article, unit, is_weighted, retail_price, in_stock, arrival_on, product_barcodes(barcode), product_photos(path, sort, source)',
           )
           .eq('org_id', orgId)
           .eq('active', true)

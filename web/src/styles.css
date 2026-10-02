@@ -737,6 +737,16 @@ a.row {
   display: none;
 }
 
+.gallery-credit {
+  margin: -12px 16px 20px;
+  font-size: 13px;
+}
+
+.gallery-credit a {
+  color: var(--muted);
+  text-decoration: none;
+}
+
 .gallery-photo {
   flex: 0 0 100%;
   width: 100%;

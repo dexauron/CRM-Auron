@@ -6,6 +6,7 @@ import {
   loadProductInternals,
   type CatalogProduct,
   type PriceChange,
+  type ProductPhoto,
   type ProductInternals,
 } from '../../api/catalog';
 import { formatDate, formatDay } from '../../shared/date';
@@ -109,7 +110,7 @@ interface Props {
   /** Магазин товара, если человек может править фото (владелец, управляющий со вторым фактором); иначе null. */
   editOrgId: string | null;
   onOpenGroup: (id: string) => void;
-  onPhotosChange: (photos: string[]) => void;
+  onPhotosChange: (photos: ProductPhoto[]) => void;
 }
 
 export function ProductCard({ product, group, privileged, editOrgId, onOpenGroup, onPhotosChange }: Props) {
@@ -151,7 +152,13 @@ export function ProductCard({ product, group, privileged, editOrgId, onOpenGroup
       )}
 
       {editOrgId && (
-        <PhotoEditor orgId={editOrgId} productId={product.id} photos={product.photos} onChange={onPhotosChange} />
+        <PhotoEditor
+          orgId={editOrgId}
+          productId={product.id}
+          barcodes={product.barcodes}
+          photos={product.photos}
+          onChange={onPhotosChange}
+        />
       )}
 
       {privileged && <InternalSections product={product} />}

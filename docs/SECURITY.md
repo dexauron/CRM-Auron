@@ -23,6 +23,8 @@
 | Токены и `initData` не пишутся в журнал | готово | `auth-telegram/index.ts` |
 | Отключение доступа одним действием, все сессии закрываются | готово | `set_member_status`, тест `team_test.sql` |
 | Гость и покупатель не получают закупку и остаток даже прямым запросом | готово | отдельная таблица `product_internals`, тест `catalog_test.sql` |
+| Внешние сайты в CSP — только Telegram, данные старого каталога на GitHub и Open Food Facts (открытые данные) | готово | `web/vite.config.ts`, `api/openFoodFacts.ts` |
+| Предупреждения Supabase Advisors о `SECURITY DEFINER`-функциях — намеренно: роль проверяется внутри каждой | принято | `docs/DECISIONS.md` |
 | Фото: запись только в папку своего магазина, EXIF (геолокация) удаляется до загрузки | готово | `photos_test.sql`, `shared/image.ts`, сценарий в Chromium |
 | На устройстве — только открытый каталог; закрыли каталог — копия стирается | готово | `catalogCache.ts`, сценарий в Chromium |
 | Импорт каталога только через RPC с проверкой роли и магазина | готово | `import_catalog`, тест `import_test.sql` |
