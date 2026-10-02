@@ -1,0 +1,179 @@
+/* Дизайн-токены (по мотивам дизайн-системы Auron). Тема Telegram подменяет их на свои. */
+:root {
+  --bg: #f2f2f7;
+  --surface: #ffffff;
+  --text: #1c1c1e;
+  --muted: #6e6e73;
+  --border: #d9d9de;
+  --accent: #5e5ce6;
+  --accent-text: #ffffff;
+  --good: #1f8f3a;
+  --warn: #9a6200;
+  --bad: #c4291c;
+  --radius: 16px;
+  --gap: 16px;
+  color-scheme: light dark;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Inter, sans-serif;
+  font-size: 17px;
+  line-height: 1.4;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-scheme='light']) {
+    --bg: #000000;
+    --surface: #1c1c1e;
+    --text: #f2f2f7;
+    --muted: #a1a1a6;
+    --border: #38383a;
+    --good: #30d158;
+    --warn: #ffd60a;
+    --bad: #ff6961;
+  }
+}
+
+:root[data-scheme='dark'] {
+  --border: #38383a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.app {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: calc(env(safe-area-inset-top) + var(--gap)) var(--gap) calc(env(safe-area-inset-bottom) + 32px);
+}
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.title {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.subtitle {
+  margin: 2px 0 0;
+  color: var(--muted);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 14px;
+}
+
+.chip-ok { color: var(--good); }
+.chip-unreachable,
+.chip-not-configured { color: var(--bad); }
+.chip-checking { color: var(--muted); }
+
+.banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 16px;
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.banner-warning { color: var(--warn); }
+
+.banner-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.button {
+  min-height: 44px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.button-quiet {
+  background: transparent;
+  color: var(--accent);
+}
+
+.button:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.section-title {
+  margin: 0 0 12px;
+  font-size: 20px;
+}
+
+.modules {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.module {
+  padding: 16px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.module-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.module-name {
+  font-weight: 600;
+}
+
+.module-stage,
+.module-soon,
+.note {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.module-hint {
+  margin: 6px 0 10px;
+}
+
+.note {
+  margin-top: 24px;
+}
