@@ -13,6 +13,8 @@ export interface TelegramWebApp {
   themeParams: Partial<Record<string, string>>;
   ready: () => void;
   expand: () => void;
+  /** Открыть ссылку t.me внутри Telegram (например, «поделиться»). */
+  openTelegramLink?: (url: string) => void;
 }
 
 declare global {

@@ -48,25 +48,45 @@ async function acceptOnce(token: string): Promise<InviteResult | null> {
 }
 
 async function establish(telegram: TelegramWebApp | null): Promise<State> {
+  const signIn = async () => {
+    if (!telegram) return null;
+    await signInWithTelegram(telegram.initData);
+    return currentSession();
+  };
   let session = await currentSession();
   if (telegram) {
     const telegramId = telegram.initDataUnsafe.user?.id;
     // Нет сессии или она чужая (другой человек на том же устройстве) — входим заново.
-    if (!session || telegramId === undefined || sessionTelegramId(session) !== telegramId) {
-      await signInWithTelegram(telegram.initData);
-      session = await currentSession();
-    }
+    if (!session || telegramId === undefined || sessionTelegramId(session) !== telegramId) session = await signIn();
   }
   if (!session) return { kind: 'guest' };
   const token = telegram ? parseInviteParam(telegram.initDataUnsafe.start_param) : null;
   const invite = token ? await acceptOnce(token) : null;
-  return { kind: 'ready', me: await loadMe(session.user.id), invite };
+  try {
+    return { kind: 'ready', me: await loadMe(session.user.id), invite };
+  } catch (error) {
+    // Сессию могли закрыть на сервере (например, после отключения доступа) — в Telegram входим заново.
+    if (!telegram) throw error;
+    session = await signIn();
+    if (!session) return { kind: 'guest' };
+    return { kind: 'ready', me: await loadMe(session.user.id), invite };
+  }
 }
 
-/** telegram: undefined — ещё выясняем, открыто ли приложение из Telegram. */
-export function Account({ telegram }: { telegram: TelegramWebApp | null | undefined }) {
+interface Props {
+  /** undefined — ещё выясняем, открыто ли приложение из Telegram. */
+  telegram: TelegramWebApp | null | undefined;
+  /** Сообщает приложению, кто вошёл (null — никто). */
+  onMe?: (me: Me | null) => void;
+}
+
+export function Account({ telegram, onMe }: Props) {
   const [state, setState] = useState<State>({ kind: 'loading' });
   const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    onMe?.(state.kind === 'ready' ? state.me : null);
+  }, [state, onMe]);
 
   useEffect(() => {
     if (telegram === undefined) return;
@@ -90,13 +110,13 @@ export function Account({ telegram }: { telegram: TelegramWebApp | null | undefi
   };
 
   return (
-    <section className="account" aria-live="polite">
+    <section className="card" aria-live="polite">
       <h2 className="section-title">{ru.account.title}</h2>
-      {state.kind === 'loading' && <p className="account-text">{ru.account.signingIn}</p>}
+      {state.kind === 'loading' && <p className="card-text">{ru.account.signingIn}</p>}
 
       {state.kind === 'guest' && (
         <>
-          <p className="account-text">{telegram ? ru.account.signedOut : ru.account.guest}</p>
+          <p className="card-text">{telegram ? ru.account.signedOut : ru.account.guest}</p>
           {telegram && (
             <button type="button" className="button" onClick={retry}>
               {ru.account.signIn}
@@ -107,7 +127,7 @@ export function Account({ telegram }: { telegram: TelegramWebApp | null | undefi
 
       {state.kind === 'error' && (
         <>
-          <p className="account-text account-error">{errorText[state.code]}</p>
+          <p className="card-text text-bad">{errorText[state.code]}</p>
           <button type="button" className="button" onClick={retry}>
             {ru.account.retry}
           </button>
@@ -116,9 +136,9 @@ export function Account({ telegram }: { telegram: TelegramWebApp | null | undefi
 
       {state.kind === 'ready' && (
         <>
-          <p className="account-text">{ru.account.hello(state.me.fullName ?? ru.account.noName)}</p>
+          <p className="card-text">{ru.account.hello(state.me.fullName ?? ru.account.noName)}</p>
           {state.invite && (
-            <p className={`account-text ${state.invite === 'accepted' ? 'account-ok' : 'account-error'}`} role="status">
+            <p className={`card-text ${state.invite === 'accepted' ? 'text-good' : 'text-bad'}`} role="status">
               {ru.account.invite[state.invite]}
             </p>
           )}
@@ -131,7 +151,7 @@ export function Account({ telegram }: { telegram: TelegramWebApp | null | undefi
               ))}
             </ul>
           ) : (
-            <p className="account-text account-muted">{ru.account.noAccess}</p>
+            <p className="card-text text-muted">{ru.account.noAccess}</p>
           )}
           <button
             type="button"
