@@ -252,6 +252,8 @@ supabase/tests/         run.sh, *_test.sql (права), auth_telegram_e2e.mjs (
   по-прежнему не проверялись.
 - Проверено: база 191 проверка, интерфейс 156 тестов, 13 браузерных сценариев, живая загрузка .xlsx на локальном
   Supabase — 14 проверок.
+- Миграция `sales_and_trends` применена к тестовому проекту; Advisors — только намеренные предупреждения
+  о `SECURITY DEFINER` (теперь и `catalog_issues`, `import_sales`).
 
 ### 2026-10-02 — Claude: приём от Codex
 - Проверено: запись Codex соответствует репозиторию (одна ветка `feature/kat-6-catalog-tools`, PR #18, main `54f7450`).
