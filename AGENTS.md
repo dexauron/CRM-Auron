@@ -12,6 +12,7 @@
 6. К серверу из интерфейса обращается только `web/src/api/`. Деньги — целые копейки (`money.ts`),
    телефоны — `+7XXXXXXXXXX` (`phone.ts`). Тексты интерфейса — `web/src/shared/i18n/ru.ts`.
 7. Перед коммитом: `cd web && npm run lint && npm run typecheck && npm test && npm run build`;
-   база: `supabase start …` и `supabase/tests/run.sh` (команды — `docs/DEPLOY.md`).
+   база: `supabase start …` и `supabase/tests/run.sh`; серверные функции: `deno check`, `deno lint`, `deno test`
+   и сквозной тест входа (команды — `docs/DEPLOY.md`).
 8. Владелец — не программист: объясняй простым языком, ручные шаги — по пунктам.
 9. Язык интерфейса и комментариев — русский, имена в коде — английские.

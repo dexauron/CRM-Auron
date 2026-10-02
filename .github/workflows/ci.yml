@@ -55,6 +55,37 @@ jobs:
       - name: RLS на всех таблицах и тесты прав
         run: supabase/tests/run.sh
 
+  functions:
+    name: Серверные функции — Deno и сквозной вход через Telegram
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          deno-version: v2.9.7
+      - name: Типы, линтер, модульные тесты
+        run: |
+          deno check supabase/functions/auth-telegram/index.ts
+          deno lint supabase/functions
+          deno test supabase/functions
+      - uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
+        with:
+          version: 2.119.0
+      - name: Локальный Supabase (база, вход, REST, шлюз, функции)
+        run: supabase start -x realtime,storage-api,imgproxy,mailpit,postgres-meta,studio,logflare,vector,supavisor
+      - name: Сквозной вход через Telegram (тестовый токен, не настоящий бот)
+        run: |
+          printf '%s\n' 'TELEGRAM_BOT_TOKEN=123456789:TEST-token-for-unit-tests-only' 'ALLOWED_ORIGINS=https://dexauron.github.io' > "$RUNNER_TEMP/functions.env"
+          supabase functions serve auth-telegram --env-file "$RUNNER_TEMP/functions.env" > "$RUNNER_TEMP/serve.log" 2>&1 &
+          for _ in $(seq 1 60); do
+            [ "$(curl -s -o /dev/null -w '%{http_code}' -X OPTIONS http://127.0.0.1:54321/functions/v1/auth-telegram)" = 204 ] && break
+            sleep 2
+          done
+          eval "$(supabase status -o env | grep -E '^(PUBLISHABLE_KEY|SECRET_KEY)=')"
+          PUB="$PUBLISHABLE_KEY" SECRET="$SECRET_KEY" node supabase/tests/auth_telegram_e2e.mjs || { tail -n 50 "$RUNNER_TEMP/serve.log"; exit 1; }
+
   secrets:
     name: Поиск секретов (gitleaks)
     runs-on: ubuntu-24.04
