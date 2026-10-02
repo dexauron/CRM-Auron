@@ -7,6 +7,7 @@ export default tseslint.config(
   { ignores: ['dist', 'dev-dist', 'node_modules'] },
   js.configs.recommended,
   ...tseslint.configs.strict,
+  { files: ['e2e/**/*.mjs'], languageOptions: { globals: { ...globals.node, ...globals.browser } } },
   {
     files: ['**/*.{ts,tsx}'],
     languageOptions: { globals: globals.browser },

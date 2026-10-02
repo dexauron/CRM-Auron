@@ -10,6 +10,13 @@ const rub = new Intl.NumberFormat('ru-RU', {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
+const wholeRub = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 });
+
+/** PostgreSQL bigint без потери копеек, в том числе за пределами точности JavaScript number. */
+export function formatExactRub(kopecks: bigint): string {
+  const absolute = kopecks < 0n ? -kopecks : kopecks;
+  return `${kopecks < 0n ? '-' : ''}${wholeRub.format(absolute / 100n)},${(absolute % 100n).toString().padStart(2, '0')}\u00a0₽`;
+}
 
 export function isKopecks(value: number): value is Kopecks {
   return Number.isSafeInteger(value);

@@ -11,23 +11,7 @@ import { applyTelegramTheme, loadTelegram, type TelegramWebApp } from './shared/
 import { Icon } from './shared/ui/icons';
 import { IconTile, Row, Section } from './shared/ui/List';
 import { LargeTitle } from './shared/ui/LargeTitle';
-
-// Экран — в адресе: #catalog — каталог, #catalog/<группа> — товары группы,
-// #catalog[/<группа>]/item/<товар> — карточка товара (группа — откуда открыли, для «Назад»).
-type Screen = { name: 'home' } | { name: 'catalog'; groupId: string | null; productId: string | null };
-const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
-const CATALOG_HASH = new RegExp(`^#catalog(?:/(${UUID}))?(?:/item/(${UUID}))?$`);
-function screenFromHash(): Screen {
-  const m = CATALOG_HASH.exec(window.location.hash);
-  return m ? { name: 'catalog', groupId: m[1] ?? null, productId: m[2] ?? null } : { name: 'home' };
-}
-
-/** Куда ведёт «Назад», если открыли экран по ссылке и истории внутри приложения нет. */
-function parentHash(screen: Screen): string {
-  if (screen.name !== 'catalog') return '';
-  if (screen.productId) return screen.groupId ? `catalog/${screen.groupId}` : 'catalog';
-  return screen.groupId ? 'catalog' : '';
-}
+import { catalogListHash, parentHash, screenFromHash } from './shared/navigation';
 
 const modules = [
   { id: 'catalog', stage: 1, icon: 'bag', color: 'blue' },
@@ -43,7 +27,7 @@ export function App() {
   const [server, setServer] = useState<ServerStatus | 'checking'>('checking');
   const [online, setOnline] = useState(() => navigator.onLine);
   // Экраны — через адрес (#catalog): кнопка «Назад» браузера и телефона работает как в приложении.
-  const [screen, setScreen] = useState<Screen>(screenFromHash);
+  const [screen, setScreen] = useState(() => screenFromHash(window.location.hash));
   const account = useAccount(telegram, isServerConfigured);
   const ready = account.state.kind === 'ready' ? account.state : null;
   const me = ready?.me ?? null;
@@ -92,7 +76,7 @@ export function App() {
       }
       scrollTarget.current = forward.current ? 0 : (scrolls.current.get(hash) ?? 0);
       forward.current = false;
-      setScreen(screenFromHash());
+      setScreen(screenFromHash(hash));
     };
     window.addEventListener('hashchange', update);
     return () => window.removeEventListener('hashchange', update);
@@ -155,7 +139,7 @@ export function App() {
         : null;
 
   if (screen.name === 'catalog' && isServerConfigured) {
-    const groupHash = screen.groupId ? `catalog/${screen.groupId}` : 'catalog';
+    const groupHash = catalogListHash(screen);
     return (
       <div className="app">
         <CatalogScreen
@@ -163,6 +147,11 @@ export function App() {
           privilegedOrgIds={orgsWithRole(['owner', 'manager', 'accountant'])}
           groupId={screen.groupId}
           productId={screen.productId}
+          tools={screen.tools}
+          issueKind={screen.issueKind}
+          viewerId={me?.userId ?? null}
+          accountLoading={account.state.kind === 'loading'}
+          onOpenTools={(kind) => navigate(`catalog/tools${kind ? `/${kind}` : ''}`)}
           onOpenGroup={(id) => navigate(`catalog/${id}`)}
           onOpenProduct={(id) => navigate(`${groupHash}/item/${id}`)}
           onBack={goBack}

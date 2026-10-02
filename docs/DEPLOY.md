@@ -25,6 +25,18 @@ npx supabase@2.119.0 stop
 ```
 Применение к тестовому проекту: `npx supabase@2.119.0 db push` (нужен вход в Supabase CLI) или через Claude/MCP.
 
+Перед `db push` сравните историю: у девяти исходных миграций в облаке MCP присвоил другие временные номера,
+чем в git. Сверять нужно имена и SQL; не повторять старые миграции. Новая `catalog_tools` добавляет только RPC
+и разрешение вызова, без изменения товаров. Применить до выкладки интерфейса с инструментами.
+
+## Браузерные проверки КАТ-6
+`web/e2e/catalog-tools.test.mjs` проверяет production-сборку с вымышленными ответами API (не настоящую авторизацию).
+В CI запускается автоматически; настоящие права проверяет `supabase/tests/catalog_tools_test.sql`.
+Локально из `web`: сборка с `VITE_SUPABASE_URL=https://example.supabase.co` и
+`VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_waymarket_e2e_placeholder`, затем
+`npx --no-install playwright install chromium --only-shell` и `npm run test:e2e`.
+Снимки: `web/test-results/catalog-tools/`, в git не добавляются.
+
 ## Вход через Telegram
 1. Токен бота — только в Supabase → Edge Functions → Secrets, имя `TELEGRAM_BOT_TOKEN`. Никому не пересылать,
    в репозиторий и на скриншоты не попадает. Если токен засветился — @BotFather → `/revoke` и новый токен сюда же.
