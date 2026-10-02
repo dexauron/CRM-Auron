@@ -39,6 +39,9 @@ function figure(item: CatalogIssue, kind: IssueKind) {
     return <span className="price tone-bad">{item.oldPrice !== null && item.newPrice !== null ? percent(item.oldPrice, item.newPrice) : '—'}</span>;
   }
   if (kind === 'bestsellers') return <span className="price">{item.amount === null ? '—' : formatExactRub(item.amount)}</span>;
+  if (kind === 'low_markup' && item.retailPrice !== null && item.purchasePrice !== null) {
+    return <span className="price">{percent(item.purchasePrice, item.retailPrice)}</span>;
+  }
   return <span className={`price ${kind === 'below_cost' ? 'tone-bad' : ''}`}>{price(item.retailPrice, item.unit)}</span>;
 }
 

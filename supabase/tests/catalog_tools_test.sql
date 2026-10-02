@@ -8,6 +8,7 @@ declare
   missing_id uuid := gen_random_uuid(); zero_id uuid := gen_random_uuid(); loss_id uuid := gen_random_uuid();
   equal_id uuid := gen_random_uuid(); good_id uuid := gen_random_uuid(); unknown_id uuid := gen_random_uuid();
   inactive_id uuid := gen_random_uuid(); other_id uuid := gen_random_uuid(); large_id uuid := gen_random_uuid();
+  thin_id uuid := gen_random_uuid(); five_id uuid := gen_random_uuid();
   viewer uuid; result jsonb; page_one jsonb; args record; denied boolean; before_count bigint; after_count bigint;
   report text[] := '{}'; checks boolean[] := '{}'; labels text[] := '{}'; idx integer;
 begin
@@ -24,10 +25,11 @@ begin
     (loss_id, org_a, 'В дешевле закупки', 9900, true), (equal_id, org_a, 'Г без наценки', 10000, true),
     (good_id, org_a, 'Д наценка одна копейка', 10001, true), (unknown_id, org_a, 'Е закупка неизвестна', 1000, true),
     (inactive_id, org_a, 'Снят с продажи', null, false), (other_id, org_b, 'Чужой товар', null, true),
-    (large_id, org_a, 'Ж большое число копеек', 9007199254740992, true);
+    (large_id, org_a, 'Ж большое число копеек', 9007199254740992, true),
+    (thin_id, org_a, 'З наценка 4,99 %', 10499, true), (five_id, org_a, 'И наценка ровно 5 %', 10500, true);
   insert into public.product_internals (product_id, org_id, purchase_price) values
     (zero_id, org_a, 100), (loss_id, org_a, 10000), (equal_id, org_a, 10000), (good_id, org_a, 10000),
-    (large_id, org_a, 9007199254740993);
+    (large_id, org_a, 9007199254740993), (thin_id, org_a, 10000), (five_id, org_a, 10000);
   insert into public.product_barcodes (product_id, org_id, barcode) values
     (loss_id, org_a, 'DUP-A'), (equal_id, org_a, 'DUP-A'), (good_id, org_a, 'DUP-B'), (equal_id, org_a, 'DUP-B'),
     (missing_id, org_a, 'UNIQUE'), (inactive_id, org_a, 'UNIQUE'), (other_id, org_b, 'DUP-A');
@@ -62,7 +64,7 @@ begin
 
     perform set_config('request.jwt.claims', jsonb_build_object('sub', viewer, 'role', 'authenticated', 'aal', 'aal2')::text, true);
     result := public.catalog_issues(org_a);
-    checks := checks || (result->'counts' = '{"missing_price":2,"below_cost":2,"no_markup":1,"duplicate_barcodes":2,"price_rise":0,"bestsellers":0}'::jsonb);
+    checks := checks || (result->'counts' = '{"missing_price":2,"below_cost":2,"no_markup":1,"low_markup":2,"duplicate_barcodes":2,"price_rise":0,"bestsellers":0}'::jsonb);
     labels := labels || 'privileged role with TOTP gets correct counts in own store'::text;
   end loop;
 
@@ -85,6 +87,10 @@ begin
   result := public.catalog_issues(org_a, 'no_markup');
   checks := checks || (result->>'total' = '1' and result->'items'->0->>'id' = equal_id::text);
   labels := labels || 'one kopeck markup and unknown purchase not treated as zero markup'::text;
+  result := public.catalog_issues(org_a, 'low_markup');
+  checks := checks || (result->>'total' = '2' and result->'items'->0->>'id' = good_id::text
+    and result->'items'->1->>'id' = thin_id::text);
+  labels := labels || 'low markup: above zero and below 5 %, smallest first; exactly 5 % and unknown purchase excluded'::text;
   result := public.catalog_issues(org_a, 'duplicate_barcodes');
   checks := checks || (result->>'total' = '4' and result->'counts'->>'duplicate_barcodes' = '2');
   labels := labels || 'two duplicate codes produce four product/code rows'::text;
