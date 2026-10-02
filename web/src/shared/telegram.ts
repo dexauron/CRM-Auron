@@ -5,8 +5,10 @@
 const SDK_URL = 'https://telegram.org/js/telegram-web-app.js';
 const SDK_TIMEOUT_MS = 4000;
 
-interface TelegramWebApp {
+export interface TelegramWebApp {
   initData: string;
+  /** Неподписанная копия initData: только для интерфейса, сервер доверяет лишь initData. */
+  initDataUnsafe: { user?: { id: number }; start_param?: string };
   colorScheme: 'light' | 'dark';
   themeParams: Partial<Record<string, string>>;
   ready: () => void;

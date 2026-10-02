@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
-import { checkServer, type ServerStatus } from './api/client';
+import { checkServer, isServerConfigured, type ServerStatus } from './api/client';
+import { Account } from './modules/common/Account';
 import { ru } from './shared/i18n/ru';
-import { applyTelegramTheme, loadTelegram } from './shared/telegram';
+import { applyTelegramTheme, loadTelegram, type TelegramWebApp } from './shared/telegram';
 
 type Platform = keyof typeof ru.platform;
 
@@ -27,6 +28,8 @@ const statusText: Record<ServerStatus | 'checking', string> = {
 
 export function App() {
   const [platform, setPlatform] = useState<Platform>(detectPlatform);
+  // undefined — ещё выясняем, открыто ли приложение из Telegram.
+  const [telegram, setTelegram] = useState<TelegramWebApp | null | undefined>(undefined);
   const [server, setServer] = useState<ServerStatus | 'checking'>('checking');
   const [online, setOnline] = useState(() => navigator.onLine);
   const {
@@ -36,12 +39,15 @@ export function App() {
 
   useEffect(() => {
     let active = true;
-    void loadTelegram().then((telegram) => {
-      if (!active || !telegram) return;
-      applyTelegramTheme(telegram);
-      telegram.ready();
-      telegram.expand();
-      setPlatform('telegram');
+    void loadTelegram().then((app) => {
+      if (!active) return;
+      if (app) {
+        applyTelegramTheme(app);
+        app.ready();
+        app.expand();
+        setPlatform('telegram');
+      }
+      setTelegram(app);
     });
     return () => {
       active = false;
@@ -94,6 +100,7 @@ export function App() {
       )}
 
       <main>
+        {isServerConfigured && <Account telegram={telegram} />}
         <h2 className="section-title">{ru.modulesTitle}</h2>
         <ul className="modules">
           {modules.map(({ id, stage }) => (
@@ -107,7 +114,6 @@ export function App() {
             </li>
           ))}
         </ul>
-        <p className="note">{ru.loginSoon}</p>
       </main>
     </div>
   );

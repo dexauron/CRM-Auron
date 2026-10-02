@@ -164,8 +164,7 @@ body {
 }
 
 .module-stage,
-.module-soon,
-.note {
+.module-soon {
   color: var(--muted);
   font-size: 14px;
 }
@@ -174,6 +173,27 @@ body {
   margin: 6px 0 10px;
 }
 
-.note {
-  margin-top: 24px;
+.account {
+  margin-bottom: 24px;
+  padding: 16px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.account .section-title {
+  margin-bottom: 8px;
+}
+
+.account-text {
+  margin: 0 0 12px;
+}
+
+.account-muted { color: var(--muted); }
+.account-ok { color: var(--good); }
+.account-error { color: var(--bad); }
+
+.account-roles {
+  margin: 0 0 12px;
+  padding-left: 20px;
 }
