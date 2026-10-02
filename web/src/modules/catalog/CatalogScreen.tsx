@@ -21,6 +21,7 @@ import { planPhotoTransfer, runPhotoTransfer, type TransferPlan } from './photoT
 import { OneCImport } from './import1c/OneCImport';
 import { ProductCard } from './ProductCard';
 import { CatalogTools } from './CatalogTools';
+import { RestockList } from './Restock';
 import { CatalogSearch, type CatalogGroup } from './search';
 
 type Load =
@@ -181,9 +182,14 @@ interface Props {
   rivalReaderOrgIds: readonly string[];
   /** …и может записать цену (все, кроме бухгалтера). */
   rivalWriterOrgIds: readonly string[];
+  /** «Закончилось на полке» (ПСТ-3): открыт список. */
+  restock: boolean;
+  /** Магазины, где человек отмечает пустые полки (владелец, управляющий, сотрудник зала). */
+  restockOrgIds: readonly string[];
+  onOpenRestock: () => void;
 }
 
-export function CatalogScreen({ groupId, productId, tools, issueKind, viewerId, accountLoading, onOpenTools, onOpenGroup, onOpenProduct, onBack, editableOrgIds, privilegedOrgIds, ownerOrgIds, rivalReaderOrgIds, rivalWriterOrgIds }: Props) {
+export function CatalogScreen({ groupId, productId, tools, issueKind, viewerId, accountLoading, onOpenTools, onOpenGroup, onOpenProduct, onBack, editableOrgIds, privilegedOrgIds, ownerOrgIds, rivalReaderOrgIds, rivalWriterOrgIds, restock, restockOrgIds, onOpenRestock }: Props) {
   const [reload, setReload] = useState(0);
   const [load, setLoad] = useState<Load>({ kind: 'loading' });
   const [sync, setSync] = useState<Sync>('checking');
@@ -279,7 +285,7 @@ export function CatalogScreen({ groupId, productId, tools, issueKind, viewerId, 
       <>
         <LargeTitle
           title={product?.name ?? ru.catalog.title}
-          back={{ label: tools ? (issueKind ? ru.catalog.tools.names[issueKind] : ru.catalog.tools.title) : group && !query.trim() ? group.name : ru.catalog.title, onClick: onBack }}
+          back={{ label: restock ? ru.catalog.restock.title : tools ? (issueKind ? ru.catalog.tools.names[issueKind] : ru.catalog.tools.title) : group && !query.trim() ? group.name : ru.catalog.title, onClick: onBack }}
         />
         {offlineNotice}
         {load.kind === 'loading' && (
@@ -310,6 +316,7 @@ export function CatalogScreen({ groupId, productId, tools, issueKind, viewerId, 
               canWrite: rivalWriterOrgIds.includes(ready.store.id),
               canManage: editableOrgIds.includes(ready.store.id),
             } : null}
+            restockOrgId={restockOrgIds.includes(ready.store.id) ? ready.store.id : null}
             onPhotosChange={(photos) =>
               setLoad((prev) =>
                 prev.kind === 'ready'
@@ -344,6 +351,26 @@ export function CatalogScreen({ groupId, productId, tools, issueKind, viewerId, 
               orgId={ready.store.id} selected={issueKind} onSelect={onOpenTools} onOpenProduct={onOpenProduct} />
           ) : load.kind === 'error' ? (
             <Section footer={t.error}><Row title={t.retry} tone="link" onClick={() => setReload((n) => n + 1)} /></Section>
+          ) : (
+            <Section footer={t.denied}><Row title={t.noAccess} tone="muted" /></Section>
+          )}
+        </main>
+      </>
+    );
+  }
+
+  if (restock) {
+    const allowed = ready && restockOrgIds.includes(ready.store.id);
+    const t = ru.catalog.restock;
+    return (
+      <>
+        {allowed && productId ? renderProduct() : <LargeTitle title={t.title} back={{ label: ru.catalog.title, onClick: onBack }} />}
+        {/* Список остаётся смонтирован под карточкой: «Назад» возвращает к тому же месту. */}
+        <main hidden={Boolean(allowed && productId)}>
+          {load.kind === 'loading' || accountLoading ? (
+            <Section><Row leading={<span className="spinner" />} title={t.loading} tone="muted" /></Section>
+          ) : ready && allowed ? (
+            <RestockList key={`${ready.store.id}:${viewerId ?? ''}`} orgId={ready.store.id} onOpenProduct={onOpenProduct} />
           ) : (
             <Section footer={t.denied}><Row title={t.noAccess} tone="muted" /></Section>
           )}
@@ -401,8 +428,15 @@ export function CatalogScreen({ groupId, productId, tools, issueKind, viewerId, 
         )}
         {load.kind === 'missing' && <Section footer={ru.catalog.missing}>{<Row title={ru.catalog.empty} tone="muted" />}</Section>}
 
-        {showGroups && privilegedOrgIds.includes(ready.store.id) && (
-          <Section><Row title={ru.catalog.tools.title} subtitle={ru.catalog.tools.hint} chevron onClick={() => onOpenTools(null)} /></Section>
+        {showGroups && (privilegedOrgIds.includes(ready.store.id) || restockOrgIds.includes(ready.store.id)) && (
+          <Section>
+            {restockOrgIds.includes(ready.store.id) && (
+              <Row title={ru.catalog.restock.title} subtitle={ru.catalog.restock.hint} chevron onClick={onOpenRestock} />
+            )}
+            {privilegedOrgIds.includes(ready.store.id) && (
+              <Row title={ru.catalog.tools.title} subtitle={ru.catalog.tools.hint} chevron onClick={() => onOpenTools(null)} />
+            )}
+          </Section>
         )}
 
         {showGroups && editableOrgIds.includes(ready.store.id) && (

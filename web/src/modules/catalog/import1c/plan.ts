@@ -3,6 +3,7 @@
 // Существующий товар не переименовывается, фото и описание не трогаются; пустое в файле ничего не стирает.
 import type { CatalogProduct } from '../../../api/catalog';
 import type { ImportGroup, ImportInternal, ImportProduct, ImportSale } from '../../../api/importCatalog';
+import type { SupplierPriceRow } from '../../../api/suppliers';
 import type { CatalogGroup } from '../search';
 import {
   nameKey, norm, normCode, type BarcodeRec, type PriceItem, type RetailRec, type SalesPeriod, type SalesRec, type StockRec, type SupplierPrice,
@@ -25,6 +26,8 @@ export interface ImportPlan {
   internals: ImportInternal[];
   /** Продажи по файлам: у каждого свой период; товары уже найдены в каталоге. */
   sales: (SalesPeriod & { rows: ImportSale[] })[];
+  /** Цена каждого поставщика за штуку или кг — для «Поставщиков товара» (загружается только на сервере в РФ). */
+  supplierPrices: SupplierPriceRow[];
   stats: { created: number; changed: number; unmatched: number; unmatchedNames: string[] };
 }
 
@@ -164,6 +167,7 @@ export function buildImportPlan(
   };
   const latest = (a: string | null, b: string | null) => (!a ? b : !b ? a : a > b ? a : b);
   const sales: ImportPlan['sales'] = [];
+  const supplierPrices = new Map<string, SupplierPriceRow>();
 
   const sorted = [...reports].sort((a, b) => ORDER.indexOf(a.type) - ORDER.indexOf(b.type));
   for (const report of sorted) {
@@ -180,6 +184,17 @@ export function buildImportPlan(
         for (const p of item.prices) d.arrival = latest(d.arrival, p.date);
         const purchase = pickPurchase(item.prices);
         if (purchase !== null) d.purchase = purchase;
+        const bySupplier = new Map<string, SupplierPrice[]>();
+        for (const p of item.prices) {
+          const name = p.supplier.trim();
+          if (name) bySupplier.set(name, [...(bySupplier.get(name) ?? []), p]);
+        }
+        for (const [supplier, list] of bySupplier) {
+          supplierPrices.set(`${d.id}\u0000${norm(supplier)}`, {
+            product_id: d.id, supplier, price: pickPurchase(list),
+            price_date: list.reduce<string | null>((a, p) => latest(a, p.date), null),
+          });
+        }
       }
     } else if (report.type === 'barcodes') {
       for (const rec of report.recs) {
@@ -258,6 +273,7 @@ export function buildImportPlan(
     products,
     internals,
     sales,
+    supplierPrices: [...supplierPrices.values()],
     stats: { created, changed, unmatched: unmatched.size, unmatchedNames: [...unmatched].slice(0, 20) },
   };
 }

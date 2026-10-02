@@ -154,6 +154,9 @@ export function App() {
           ownerOrgIds={orgsWithRole(['owner'])}
           rivalReaderOrgIds={orgsWithAccess(['owner', 'manager', 'accountant', 'staff'])}
           rivalWriterOrgIds={orgsWithAccess(['owner', 'manager', 'staff'])}
+          restock={screen.restock}
+          restockOrgIds={orgsWithAccess(['owner', 'manager', 'staff'])}
+          onOpenRestock={() => navigate('catalog/restock')}
           groupId={screen.groupId}
           productId={screen.productId}
           tools={screen.tools}

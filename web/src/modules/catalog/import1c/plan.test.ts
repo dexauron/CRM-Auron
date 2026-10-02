@@ -138,3 +138,19 @@ describe('КАТ-6: продажи в плане загрузки', () => {
     expect(plan.sales[0]?.rows).toEqual([{ product_id: plan.products[0]?.id, qty: 2, amount: 10000 }]);
   });
 });
+
+describe('ПСТ-8: цены поставщиков из «Цен поставщиков»', () => {
+  it('по каждому поставщику — цена за штуку и самая свежая дата', () => {
+    const plan = buildImportPlan([{ type: 'prices', items: parsePriceReport([
+      HEAD,
+      ['Snickers 50,5г', '1 463', 'Опт', 'упак (48)', '1 920,00', '05.08.2026', 'Шоколад'],
+      ['Snickers 50,5г', '1 463', 'Своя', 'шт', '43,33', '01.08.2026', 'Шоколад'],
+      ['Snickers 50,5г', '1 463', 'Своя', 'шт', '44,00', '03.08.2026', 'Шоколад'],
+    ]) }], [], []);
+    const id = plan.products[0]?.id;
+    expect(plan.supplierPrices).toEqual([
+      { product_id: id, supplier: 'Опт', price: 4000, price_date: '2026-08-05' },
+      { product_id: id, supplier: 'Своя', price: 4400, price_date: '2026-08-03' },
+    ]);
+  });
+});
