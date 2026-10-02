@@ -1,19 +1,76 @@
 // Каталог (КАТ-1, КАТ-2, КАТ-4): поиск как в iOS, группы, товары с ценой и наличием. Открыт и гостю.
 import { useDeferredValue, useEffect, useMemo, useState } from 'react';
-import { loadCatalog, loadStore, type CatalogProduct } from '../../api/catalog';
+import { loadCatalog, loadStore, type CatalogProduct, type Store } from '../../api/catalog';
+import { importCatalog, type ImportTotals } from '../../api/importCatalog';
 import { STORE_SLUG } from '../../shared/config';
 import { ru } from '../../shared/i18n/ru';
 import { formatRub } from '../../shared/money';
 import { Icon } from '../../shared/ui/icons';
 import { LargeTitle } from '../../shared/ui/LargeTitle';
 import { Row, Section } from '../../shared/ui/List';
+import { fetchOldCatalog } from './oldCatalog';
 import { CatalogSearch, type CatalogGroup } from './search';
 
 type Load =
   | { kind: 'loading' }
   | { kind: 'missing' }
   | { kind: 'error' }
-  | { kind: 'ready'; groups: CatalogGroup[]; products: CatalogProduct[] };
+  | { kind: 'ready'; store: Store; groups: CatalogGroup[]; products: CatalogProduct[] };
+
+type ImportState =
+  | { kind: 'idle' }
+  | { kind: 'confirm' }
+  | { kind: 'running'; done: number; total: number }
+  | { kind: 'done'; totals: ImportTotals }
+  | { kind: 'error' };
+
+/** Перенос старого каталога — только владельцу и управляющему (со вторым фактором). */
+function ImportSection({ storeId, onImported }: { storeId: string; onImported: () => void }) {
+  const [state, setState] = useState<ImportState>({ kind: 'idle' });
+  const run = async () => {
+    setState({ kind: 'running', done: 0, total: 0 });
+    try {
+      const { groups, products } = await fetchOldCatalog();
+      const totals = await importCatalog(storeId, groups, products, (done, total) => setState({ kind: 'running', done, total }));
+      setState({ kind: 'done', totals });
+      onImported();
+    } catch {
+      setState({ kind: 'error' });
+    }
+  };
+  return (
+    <Section title={ru.catalog.import.title} id="import-title" footer={ru.catalog.import.footer}>
+      {state.kind === 'idle' && (
+        <Row title={ru.catalog.import.old} tone="link" onClick={() => setState({ kind: 'confirm' })} />
+      )}
+      {state.kind === 'confirm' && (
+        <>
+          <Row title={ru.catalog.import.confirm} tone="link" onClick={() => void run()} />
+          <Row title={ru.catalog.import.cancel} tone="muted" onClick={() => setState({ kind: 'idle' })} />
+        </>
+      )}
+      {state.kind === 'running' && (
+        <div role="status">
+          <Row
+            leading={<span className="spinner" />}
+            title={state.total ? ru.catalog.import.progress(state.done, state.total) : ru.catalog.import.downloading}
+            tone="muted"
+          />
+        </div>
+      )}
+      {state.kind === 'done' && (
+        <div role="status">
+          <Row title={ru.catalog.import.done(state.totals)} tone="good" />
+        </div>
+      )}
+      {state.kind === 'error' && (
+        <div role="alert">
+          <Row title={ru.catalog.import.error} tone="bad" onClick={() => setState({ kind: 'idle' })} />
+        </div>
+      )}
+    </Section>
+  );
+}
 
 const PAGE = 50;
 const collator = new Intl.Collator('ru');
@@ -38,9 +95,12 @@ interface Props {
   onOpenGroup: (id: string) => void;
   /** Шаг назад: из группы — к группам, из каталога — на главную. */
   onBack: () => void;
+  /** Магазины, где человек может менять каталог (владелец, управляющий со вторым фактором). */
+  editableOrgIds: readonly string[];
 }
 
-export function CatalogScreen({ groupId, onOpenGroup, onBack }: Props) {
+export function CatalogScreen({ groupId, onOpenGroup, onBack, editableOrgIds }: Props) {
+  const [reload, setReload] = useState(0);
   const [load, setLoad] = useState<Load>({ kind: 'loading' });
   const [query, setQuery] = useState('');
   const [limit, setLimit] = useState(PAGE);
@@ -51,7 +111,7 @@ export function CatalogScreen({ groupId, onOpenGroup, onBack }: Props) {
     (async () => {
       const store = await loadStore(STORE_SLUG);
       if (!store) return { kind: 'missing' } as const;
-      return { kind: 'ready', ...(await loadCatalog(store.id)) } as const;
+      return { kind: 'ready', store, ...(await loadCatalog(store.id)) } as const;
     })().then(
       (next) => active && setLoad(next),
       () => active && setLoad({ kind: 'error' }),
@@ -59,7 +119,7 @@ export function CatalogScreen({ groupId, onOpenGroup, onBack }: Props) {
     return () => {
       active = false;
     };
-  }, []);
+  }, [reload]);
 
   const ready = load.kind === 'ready' ? load : null;
   const engine = useMemo(() => (ready ? new CatalogSearch(ready.products, ready.groups) : null), [ready]);
@@ -118,6 +178,10 @@ export function CatalogScreen({ groupId, onOpenGroup, onBack }: Props) {
           </p>
         )}
         {load.kind === 'missing' && <Section footer={ru.catalog.missing}>{<Row title={ru.catalog.empty} tone="muted" />}</Section>}
+
+        {showGroups && editableOrgIds.includes(ready.store.id) && (
+          <ImportSection storeId={ready.store.id} onImported={() => setReload((n) => n + 1)} />
+        )}
 
         {showGroups && (
           <Section title={ru.catalog.groups} id="groups-title" footer={ru.catalog.total(ready.products.length)}>

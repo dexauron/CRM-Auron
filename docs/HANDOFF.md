@@ -1,6 +1,6 @@
 # Передача проекта следующему исполнителю (ChatGPT / Codex или другой ИИ)
 
-Обновлено: 2026-10-02 (каталог: поиск и экран), Claude. Этот файл — точка входа: прочитай его целиком, потом файлы из раздела 2.
+Обновлено: 2026-10-02 (каталог: импорт), Claude. Этот файл — точка входа: прочитай его целиком, потом файлы из раздела 2.
 Работа продолжается в этом же репозитории `dexauron/CRM-Auron`. Начинай с раздела 8 «Что делать дальше».
 
 ---
@@ -62,8 +62,9 @@
 web/src/api/            связь с сервером (auth, team, mfa, client)
 web/src/modules/common/ учётная запись, вход, второй фактор
 web/src/modules/staff/  экран «Команда»: приглашения, участники
+web/src/modules/catalog/ каталог: поиск (search.ts), экран, перенос старого каталога (oldCatalog.ts)
 web/src/shared/         ui (дизайн iOS), i18n, деньги, телефоны, даты, Telegram
-supabase/migrations/    core → core_fk_indexes → team → second_factor
+supabase/migrations/    core → core_fk_indexes → team → second_factor → catalog → catalog_import
 supabase/functions/     auth-telegram + _shared/telegram-init-data.ts
 supabase/tests/         run.sh, *_test.sql (права), auth_telegram_e2e.mjs (сквозной вход)
 ```
@@ -80,6 +81,9 @@ supabase/tests/         run.sh, *_test.sql (права), auth_telegram_e2e.mjs (
 | #7 | Дизайн в стиле iOS + `docs/DESIGN.md` как правило для всей системы | снимки светлой/тёмной темы, 17 сценариев |
 | #8 | Второй фактор (TOTP) для владельца, управляющего, бухгалтера; этот файл | 12 тестов прав, 13 сценариев в Chromium |
 | #9 | Вход с ПК: своё окно Telegram (без `telegram-widget.js` — он требует `eval`), проверка подписи виджета | 6 Deno-тестов, сквозной 16/16, 7 сценариев в Chromium |
+| #10 | Каталог: база — группы, товары, штрихкоды, закрытая часть (закупка, остаток), история цен; открытый каталог по `slug` | 24 теста прав |
+| #11 | Каталог: поиск (перенос алгоритма старого каталога, 15 эталонных случаев) и экран в стиле iOS | 23 теста поиска, 10 сценариев в Chromium |
+| #12 | Каталог: импорт — RPC `import_catalog`, перенос старого каталога одной кнопкой | 15 тестов прав, 8 сценариев в Chromium (18 945 товаров) |
 
 Не сливать: **PR #2** (Dependabot, TypeScript 7) — typescript-eslint пока поддерживает TypeScript до 6.0.
 
@@ -88,7 +92,7 @@ supabase/tests/         run.sh, *_test.sql (права), auth_telegram_e2e.mjs (
 - Бот: **@auron_core_bot**; кнопка меню и Mini App ведут на сайт; ссылки-приглашения
   `https://t.me/auron_core_bot?startapp=inv_<токен>`.
 - Supabase: тестовый проект **CRM-Auron-Test** (Франкфурт) — **только для вымышленных данных**.
-  Применены миграции core, core_fk_indexes, team, second_factor (проверяй `list_migrations`).
+  Применены миграции core, core_fk_indexes, team, second_factor, catalog, catalog_import (проверяй `list_migrations`).
   Функция `auth-telegram` выложена с `verify_jwt = false`. Открытая регистрация выключена владельцем.
   Владелец вошёл и назначен владельцем магазина «Way Market».
 - Переменные репозитория (не секреты): `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`.
@@ -135,11 +139,14 @@ supabase/tests/         run.sh, *_test.sql (права), auth_telegram_e2e.mjs (
   (закрытое), `price_history`; гость видит каталог магазина с `catalog_public = true` по `slug`.
 - Поиск и экран каталога — сделаны (`web/src/modules/catalog/`): перенос алгоритма старого каталога с его
   15 эталонными случаями; группы, поиск, цена, «есть / нет»; открыт гостю (`#catalog`).
-- В тестовом проекте магазин `way-market` открыт гостям, но **товаров ещё нет**.
-- Дальше: импорт (КАТ-5) — экран владельца «Импорт»: файл старого каталога (открытые данные
-  `dexauron/auron`, ветка `claude/store-product-catalog-60wer4`, `catalog/data/p/*.json` + `groups.json`,
-  18 945 товаров; цена в рублях → копейки; `stock_state` in/low → есть, out → нет; у 9 штрихкодов спереди
-  количество «1 2040…») и выгрузки 1С (нужны образцы файлов от владельца); затем сканер (КАТ-3, ZXing для
+- Импорт — сделан: RPC `import_catalog` и кнопка «Перенести из старого каталога» (блок «Импорт» на экране
+  каталога, виден владельцу и управляющему со вторым фактором). Источник — открытые данные `dexauron/auron`,
+  ветка `claude/store-product-catalog-60wer4`, `catalog/data/` (18 945 товаров, 220 групп).
+- В тестовом проекте магазин `way-market` открыт гостям; **товары переносит владелец сам** (кнопкой, после
+  подключения второго фактора). Проверь числом: `select count(*) from products` = 18 945.
+- Дальше: выгрузки 1С (КАТ-5, часть 2: перенос разборщиков из старого `imports.js` — цены поставщиков,
+  штрихкоды, остатки, продажи; библиотека чтения Excel по правилам открытого кода в `docs/DECISIONS.md`;
+  нужны образцы файлов от владельца, с вымышленными данными в тестах); затем сканер (КАТ-3, ZXing для
   iPhone), офлайн (КАТ-8, IndexedDB), фото (КАТ-7, Supabase Storage), инструменты (КАТ-6).
 
 **Затем этапы 1–7 по `docs/TZ.md`, раздел 11** (порядок может поменять владелец):

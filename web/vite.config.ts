@@ -8,7 +8,8 @@ import { VitePWA } from 'vite-plugin-pwa';
 function contentSecurityPolicy(apiUrl: string): Plugin {
   const api = apiUrl ? new URL(apiUrl) : null;
   // oauth.telegram.org — ответ окна входа с ПК, если оно закрылось без сообщения (shared/telegramLogin.ts).
-  const connect = ["'self'", 'https://oauth.telegram.org'];
+  // raw.githubusercontent.com — открытые данные старого каталога для переноса (modules/catalog/oldCatalog.ts).
+  const connect = ["'self'", 'https://oauth.telegram.org', 'https://raw.githubusercontent.com'];
   const images = ["'self'", 'data:', 'blob:'];
   if (api) {
     connect.push(api.origin, `wss://${api.host}`);
