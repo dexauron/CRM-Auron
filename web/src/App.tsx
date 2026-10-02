@@ -2,14 +2,12 @@ import { useEffect, useState } from 'react';
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import { checkServer, type ServerStatus } from './api/client';
 import { ru } from './shared/i18n/ru';
-import { applyTelegramTheme, getTelegram } from './shared/telegram';
+import { applyTelegramTheme, loadTelegram } from './shared/telegram';
 
 type Platform = keyof typeof ru.platform;
 
 function detectPlatform(): Platform {
-  if (getTelegram()) return 'telegram';
-  if (window.matchMedia('(display-mode: standalone)').matches) return 'installed';
-  return 'browser';
+  return window.matchMedia('(display-mode: standalone)').matches ? 'installed' : 'browser';
 }
 
 const modules = [
@@ -28,7 +26,7 @@ const statusText: Record<ServerStatus | 'checking', string> = {
 };
 
 export function App() {
-  const [platform] = useState<Platform>(detectPlatform);
+  const [platform, setPlatform] = useState<Platform>(detectPlatform);
   const [server, setServer] = useState<ServerStatus | 'checking'>('checking');
   const [online, setOnline] = useState(() => navigator.onLine);
   const {
@@ -37,12 +35,17 @@ export function App() {
   } = useRegisterSW();
 
   useEffect(() => {
-    const telegram = getTelegram();
-    if (telegram) {
+    let active = true;
+    void loadTelegram().then((telegram) => {
+      if (!active || !telegram) return;
       applyTelegramTheme(telegram);
       telegram.ready();
       telegram.expand();
-    }
+      setPlatform('telegram');
+    });
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {

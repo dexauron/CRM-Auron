@@ -1,5 +1,12 @@
 # Ход работ
 
+## 2026-10-02 — исправление: пустой экран при медленном telegram.org (Claude)
+- Сайт выложен на GitHub Pages: https://dexauron.github.io/CRM-Auron/
+- Найдено: при зависшем запросе к telegram.org приложение не запускалось. SDK Telegram теперь грузится только
+  внутри Telegram, асинхронно и с ограничением 4 с (`web/src/shared/telegram.ts`), тесты — `telegram.test.ts`.
+- Проверено в Chromium: браузер, Telegram с зависшим и с недоступным telegram.org — отрисовка за ~0,2 с;
+  Telegram с рабочим SDK — тема Telegram применяется, нарушений CSP нет.
+
 ## 2026-10-02 — этап 0, часть 1 (Claude)
 
 Сделано:
@@ -22,9 +29,8 @@
 Следующий шаг: Edge Function `auth-telegram` (вход по `initData`), затем экран приглашений.
 
 Нужно от владельца:
-1. Включить GitHub Pages: Settings → Pages → Source: GitHub Actions.
-2. Добавить переменные: Settings → Secrets and variables → Actions → Variables —
-   `VITE_SUPABASE_URL` и `VITE_SUPABASE_PUBLISHABLE_KEY` (значения — в `docs/DEPLOY.md`).
+1. ~~Включить GitHub Pages~~ — сделано.
+2. ~~Добавить переменные `VITE_SUPABASE_URL` и `VITE_SUPABASE_PUBLISHABLE_KEY`~~ — сделано.
 3. Создать бота у @BotFather и положить токен в Supabase → Edge Functions → Secrets (`TELEGRAM_BOT_TOKEN`).
 
 Известные ограничения:
