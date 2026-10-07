@@ -148,37 +148,22 @@ create policy supplier_order_items_select on public.supplier_order_items for sel
           and o.supplier_id in (select private.my_supplier_ids(supplier_order_items.org_id))))
 );
 
--- ── Оформление заказа ────────────────────────────────────────────────
--- p_items: [{product_id, qty}] для товара из каталога или [{name, qty}] для того, чего в каталоге нет.
--- p_marks: отметки «Закончилось на полке», которые этот заказ закрывает — помечаем заказанными тем же действием.
--- Цену берём из `product_suppliers` этого поставщика; нет цены — строка без цены, сумма будет неполной,
--- и интерфейс об этом честно скажет.
-create function public.supplier_order_create(
-  p_org uuid, p_supplier uuid, p_expected_at date default null,
-  p_items jsonb default '[]'::jsonb, p_marks uuid[] default null, p_note text default null
-) returns uuid
+-- ── Позиции заказа ───────────────────────────────────────────────────
+-- Разбор присланных позиций и вставка — ОДИН раз: этим занимаются и оформление заказа, и правка
+-- состава, и расходиться они не должны. Иначе заказ, оформленный из списка «Закончилось», и тот же
+-- заказ после правки количества считались бы по разным правилам.
+create function private.supplier_order_fill(p_org uuid, p_order uuid, p_supplier uuid, p_items jsonb)
+returns integer
 language plpgsql security definer set search_path = '' as $$
 declare
-  v_order uuid;
   v_count int;
 begin
-  if not private.has_role(p_org, array['owner', 'manager', 'staff']::public.app_role[]) then
-    raise exception 'Нет прав оформлять заказ' using errcode = '42501';
-  end if;
   if jsonb_typeof(p_items) is distinct from 'array' or jsonb_array_length(p_items) = 0 then
     raise exception 'В заказе нет ни одной позиции' using errcode = '22023', hint = 'empty_order';
   end if;
   if jsonb_array_length(p_items) > 500 then
     raise exception 'Слишком много позиций: не больше 500' using errcode = '22023', hint = 'too_many';
   end if;
-  if not exists (select 1 from public.suppliers s
-                 where s.id = p_supplier and s.org_id = p_org and s.deleted_at is null) then
-    raise exception 'Поставщик не найден' using errcode = '22023', hint = 'no_supplier';
-  end if;
-
-  insert into public.supplier_orders (org_id, supplier_id, expected_at, note)
-  values (p_org, p_supplier, p_expected_at, nullif(btrim(p_note), ''))
-  returning id into v_order;
 
   with src as (
     select x.product_id, btrim(x.name) as name, x.qty
@@ -194,7 +179,7 @@ begin
     order by coalesce(s.product_id::text, lower(s.name)), s.qty desc
   )
   insert into public.supplier_order_items (org_id, order_id, product_id, name, cash_code, unit, qty, price)
-  select p_org, v_order, p.id,
+  select p_org, p_order, p.id,
     coalesce(p.name, o.name), p.cash_code, coalesce(p.unit, 'pcs'), round(o.qty, 3),
     (select ps.price from public.product_suppliers ps
      where ps.org_id = p_org and ps.product_id = p.id and ps.supplier_id = p_supplier)
@@ -203,10 +188,40 @@ begin
   -- Товар чужого магазина молча не превращаем в строку «от руки»: такую позицию просто не берём.
   where p.id is not null or (o.product_id is null and o.name is not null);
 
-  select count(*) into v_count from public.supplier_order_items where order_id = v_order;
+  select count(*) into v_count from public.supplier_order_items where order_id = p_order;
   if v_count = 0 then
     raise exception 'Ни одна позиция не подошла: товары не из этого магазина' using errcode = '22023', hint = 'empty_order';
   end if;
+  return v_count;
+end;
+$$;
+revoke all on function private.supplier_order_fill(uuid, uuid, uuid, jsonb) from public, anon, authenticated;
+
+-- ── Оформление заказа ────────────────────────────────────────────────
+-- p_items: [{product_id, qty}] для товара из каталога или [{name, qty}] для того, чего в каталоге нет.
+-- p_marks: отметки «Закончилось на полке», которые этот заказ закрывает — помечаем заказанными тем же действием.
+-- Цену берём из `product_suppliers` этого поставщика; нет цены — строка без цены, сумма будет неполной,
+-- и интерфейс об этом честно скажет.
+create function public.supplier_order_create(
+  p_org uuid, p_supplier uuid, p_expected_at date default null,
+  p_items jsonb default '[]'::jsonb, p_marks uuid[] default null, p_note text default null
+) returns uuid
+language plpgsql security definer set search_path = '' as $$
+declare
+  v_order uuid;
+begin
+  if not private.has_role(p_org, array['owner', 'manager', 'staff']::public.app_role[]) then
+    raise exception 'Нет прав оформлять заказ' using errcode = '42501';
+  end if;
+  if not exists (select 1 from public.suppliers s
+                 where s.id = p_supplier and s.org_id = p_org and s.deleted_at is null) then
+    raise exception 'Поставщик не найден' using errcode = '22023', hint = 'no_supplier';
+  end if;
+
+  insert into public.supplier_orders (org_id, supplier_id, expected_at, note)
+  values (p_org, p_supplier, p_expected_at, nullif(btrim(p_note), ''))
+  returning id into v_order;
+  perform private.supplier_order_fill(p_org, v_order, p_supplier, p_items);
 
   -- Закрываем отметки «Закончилось на полке» по товарам этого заказа.
   if p_marks is not null and array_length(p_marks, 1) > 0 then
@@ -238,41 +253,8 @@ begin
   if v_status is distinct from 'created' then
     raise exception 'Состав заказа меняют, пока он не подтверждён' using errcode = '22023', hint = 'order_frozen';
   end if;
-  if jsonb_typeof(p_items) is distinct from 'array' or jsonb_array_length(p_items) = 0 then
-    raise exception 'В заказе нет ни одной позиции' using errcode = '22023', hint = 'empty_order';
-  end if;
-  if jsonb_array_length(p_items) > 500 then
-    raise exception 'Слишком много позиций: не больше 500' using errcode = '22023', hint = 'too_many';
-  end if;
-
   delete from public.supplier_order_items where order_id = p_order and org_id = p_org;
-  with src as (
-    select x.product_id, btrim(x.name) as name, x.qty
-    from jsonb_to_recordset(p_items) as x(product_id uuid, name text, qty numeric)
-  ), ok as (
-    -- Повтор одного товара в присланном списке — берём большее количество, а не складываем:
-    -- интерфейс так не делает, а вот ошибиться и прислать то же дважды он может.
-    select distinct on (coalesce(s.product_id::text, lower(s.name)))
-      s.product_id, case when s.product_id is null then s.name end as name, s.qty
-    from src s
-    where s.qty > 0 and s.qty <= 1000000
-      and (s.product_id is not null or char_length(coalesce(s.name, '')) between 1 and 300)
-    order by coalesce(s.product_id::text, lower(s.name)), s.qty desc
-  )
-  insert into public.supplier_order_items (org_id, order_id, product_id, name, cash_code, unit, qty, price)
-  select p_org, p_order, p.id,
-    coalesce(p.name, o.name), p.cash_code, coalesce(p.unit, 'pcs'), round(o.qty, 3),
-    (select ps.price from public.product_suppliers ps
-     where ps.org_id = p_org and ps.product_id = p.id and ps.supplier_id = v_supplier)
-  from ok o
-  left join public.products p on p.id = o.product_id and p.org_id = p_org
-  -- Товар чужого магазина молча не превращаем в строку «от руки»: такую позицию просто не берём.
-  where p.id is not null or (o.product_id is null and o.name is not null);
-
-  select count(*) into v_count from public.supplier_order_items where order_id = p_order;
-  if v_count = 0 then
-    raise exception 'Ни одна позиция не подошла: товары не из этого магазина' using errcode = '22023', hint = 'empty_order';
-  end if;
+  v_count := private.supplier_order_fill(p_org, p_order, v_supplier, p_items);
   return jsonb_build_object('items', v_count);
 end;
 $$;

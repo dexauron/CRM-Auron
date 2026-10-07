@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   canEditItems, loadOrder, loadOrders, nextStatuses, orderText, OrdersError, setOrderItems, setOrderStatus,
-  type NextStatus, type OrderFull, type OrderLine, type OrderRow, type OrdersView,
+  type NextStatus, type OrderFull, type OrderLine, type OrderRow,
 } from '../../api/supplierOrders';
 import { formatDate } from '../../shared/date';
 import { ru } from '../../shared/i18n/ru';
@@ -33,24 +33,35 @@ function Failed({ denied, onRetry }: { denied: boolean; onRetry: () => void }) {
   );
 }
 
-function useOrders(orgId: string): [Load<OrdersView>, () => void] {
-  const [load, setLoad] = useState<Load<OrdersView>>({ kind: 'loading' });
+/* Загрузка с сервера: «идёт», «не получилось» или данные. Список и карточка заказа грузились
+ * двумя одинаковыми кусками, и тихое обновление (без мелькания «Загружаю…») пришлось бы писать
+ * в обоих. Теперь загрузчик один:
+ *   retry   — с видимым «Загружаю…», для повтора после ошибки;
+ *   refresh — тихо, когда данные уже на экране: иначе карточка на мгновение исчезает вместе
+ *             с сообщением «Количество сохранено», и человек не понимает, сохранилось ли. */
+function useLoaded<T>(get: () => Promise<T>): { load: Load<T>; retry: () => void; refresh: () => void } {
+  const [load, setLoad] = useState<Load<T>>({ kind: 'loading' });
   const [attempt, setAttempt] = useState(0);
-  useEffect(() => {
+  const take = useCallback((quiet: boolean) => {
     let active = true;
-    loadOrders(orgId).then(
+    get().then(
       (data) => active && setLoad({ kind: 'ready', data }),
-      (e: unknown) => active && setLoad({ kind: 'error', denied: e instanceof OrdersError && e.reason === 'forbidden' }),
+      (e: unknown) => active && !quiet
+        && setLoad({ kind: 'error', denied: e instanceof OrdersError && e.reason === 'forbidden' }),
     );
     return () => {
       active = false;
     };
-  }, [orgId, attempt]);
+  }, [get]);
+  useEffect(() => take(false), [take, attempt]);
   const retry = useCallback(() => {
     setLoad({ kind: 'loading' });
     setAttempt((n) => n + 1);
   }, []);
-  return [load, retry];
+  const refresh = useCallback(() => {
+    take(true);
+  }, [take]);
+  return { load, retry, refresh };
 }
 
 function OrderLineRow({ order, onOpen }: { order: OrderRow; onOpen: () => void }) {
@@ -75,7 +86,7 @@ function OrderLineRow({ order, onOpen }: { order: OrderRow; onOpen: () => void }
 }
 
 export function OrdersList({ orgId, onOpenOrder }: { orgId: string; onOpenOrder: (id: string) => void }) {
-  const [load, retry] = useOrders(orgId);
+  const { load, retry } = useLoaded(useCallback(() => loadOrders(orgId), [orgId]));
   // Выбранный день календаря: показываем только его заказы, пока человек не нажмёт «Все дни».
   const [picked, setPicked] = useState<string | null>(null);
 
@@ -177,34 +188,12 @@ function Composition({ orgId, order, canEdit, onSaved }:
 export function OrderCard({
   orgId, orderId, canManage, onChanged,
 }: { orgId: string; orderId: string; canManage: boolean; onChanged?: () => void }) {
-  const [load, setLoad] = useState<Load<OrderFull>>({ kind: 'loading' });
-  const [attempt, setAttempt] = useState(0);
+  const { load, retry, refresh } = useLoaded(useCallback(() => loadOrder(orgId, orderId), [orgId, orderId]));
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
-  const reload = useCallback(() => {
-    setLoad({ kind: 'loading' });
-    setAttempt((n) => n + 1);
-  }, []);
-  /* После правки количества или смены состояния перечитываем заказ ТИХО, без «Загружаю…»:
-     иначе карточка на мгновение исчезает вместе с сообщением «Количество сохранено», и человек
-     не понимает, сохранилось ли. Видимую загрузку оставляем только для повтора после ошибки. */
-  const refresh = useCallback(() => {
-    loadOrder(orgId, orderId).then((data) => setLoad({ kind: 'ready', data }), () => undefined);
-  }, [orgId, orderId]);
-
-  useEffect(() => {
-    let active = true;
-    loadOrder(orgId, orderId).then(
-      (data) => active && setLoad({ kind: 'ready', data }),
-      (e: unknown) => active && setLoad({ kind: 'error', denied: e instanceof OrdersError && e.reason === 'forbidden' }),
-    );
-    return () => {
-      active = false;
-    };
-  }, [orgId, orderId, attempt]);
 
   if (load.kind === 'loading') return <Loading text={t.loading} />;
-  if (load.kind === 'error') return <Failed denied={load.denied} onRetry={reload} />;
+  if (load.kind === 'error') return <Failed denied={load.denied} onRetry={retry} />;
   const order = load.data;
 
   const change = async (status: NextStatus) => {
