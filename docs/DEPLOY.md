@@ -23,6 +23,12 @@ npx supabase@2.119.0 start -x gotrue,realtime,imgproxy,kong,mailpit,postgrest,po
 supabase/tests/run.sh
 npx supabase@2.119.0 stop
 ```
+**Если Docker недоступен** (например, в облачной сессии), те же миграции и тесты прав прогоняются на обычной
+PostgreSQL — но это только быстрая проверка синтаксиса и прав, истина остаётся за CI:
+```bash
+setpriv --reuid=postgres --regid=postgres --init-groups supabase/tests/local-no-docker.sh
+```
+
 Применение к тестовому проекту: `npx supabase@2.119.0 db push` (нужен вход в Supabase CLI) или через Claude/MCP.
 
 Перед `db push` сравните историю: у девяти исходных миграций в облаке MCP присвоил другие временные номера,

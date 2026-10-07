@@ -3,6 +3,7 @@ import { Fragment, useEffect, useState } from 'react';
 import {
   groupBySupplier, loadOpenMark, loadRestock, markEmpty, markOrdered, RestockError, restockText, unmark, type RestockItem,
 } from '../../api/restock';
+import { createOrder } from '../../api/supplierOrders';
 import { formatDate } from '../../shared/date';
 import { ru } from '../../shared/i18n/ru';
 import { Icon } from '../../shared/ui/icons';
@@ -54,7 +55,12 @@ export function RestockButton({ orgId, productId }: { orgId: string; productId: 
 
 type Load = { kind: 'loading' } | { kind: 'error'; denied: boolean } | { kind: 'ready'; items: RestockItem[] };
 
-export function RestockList({ orgId, onOpenProduct }: { orgId: string; onOpenProduct: (id: string) => void }) {
+export function RestockList({ orgId, onOpenProduct, onOpenOrder }: {
+  orgId: string;
+  onOpenProduct: (id: string) => void;
+  /** Оформили заказ — сразу открываем его, чтобы поправить количество и отправить поставщику. */
+  onOpenOrder?: (id: string) => void;
+}) {
   const [load, setLoad] = useState<Load>({ kind: 'loading' });
   const [attempt, setAttempt] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -96,6 +102,27 @@ export function RestockList({ orgId, onOpenProduct }: { orgId: string; onOpenPro
     }
   };
 
+  /* Заказ оформляется прямо отсюда: иначе человеку пришлось бы переписывать список руками в
+     другом разделе. По одной единице на товар — количество правят уже в заказе. */
+  const order = async (supplierId: string, items: RestockItem[]) => {
+    setBusy(true);
+    setNote(null);
+    try {
+      const id = await createOrder(orgId, {
+        supplierId,
+        expectedAt: null,
+        items: items.map((i) => ({ productId: i.productId, qty: 1 })),
+        markIds: items.map((i) => i.id),
+      });
+      if (onOpenOrder) onOpenOrder(id);
+      else setAttempt((n) => n + 1);
+    } catch {
+      setNote(ru.suppliers.orders.failed);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const share = async () => {
     const text = restockText(groups, t.shareTitle, t.noSupplier);
     try {
@@ -126,6 +153,11 @@ export function RestockList({ orgId, onOpenProduct }: { orgId: string; onOpenPro
                     i.orderedAt && t.ordered(formatDate(i.orderedAt))].filter(Boolean).join(' · ')} />
               </Fragment>
             ))}
+            {open.length > 0 && g.supplierId && (
+              <Row title={ru.suppliers.orders.createFromRestock} tone="link" disabled={busy}
+                onClick={() => void order(g.supplierId as string, g.items.filter((i) => !i.orderedAt))} />
+            )}
+            {open.length > 0 && !g.supplierId && <Row title={ru.suppliers.orders.noSupplierOrder} tone="muted" />}
             {open.length > 0 && <Row title={t.markOrdered} tone="link" disabled={busy} onClick={() => void ordered(open)} />}
           </Section>
         );

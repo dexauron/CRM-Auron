@@ -157,6 +157,7 @@ export function App() {
           restock={screen.restock}
           restockOrgIds={orgsWithAccess(['owner', 'manager', 'staff'])}
           onOpenRestock={() => navigate('catalog/restock')}
+          onOpenOrder={(id) => navigate(`suppliers/orders/${id}`)}
           groupId={screen.groupId}
           productId={screen.productId}
           tools={screen.tools}
@@ -182,8 +183,12 @@ export function App() {
               && ['owner', 'manager', 'accountant', 'staff'].includes(m.role))
             .map((m) => ({ orgId: m.orgId, orgName: m.orgName, canEdit: editable.includes(m.orgId) }))}
           supplierId={screen.supplierId}
+          orders={screen.orders}
+          orderId={screen.orderId}
           accountLoading={account.state.kind === 'loading'}
           onOpen={(id) => navigate(`suppliers/${id}`)}
+          onOpenOrders={() => navigate('suppliers/orders')}
+          onOpenOrder={(id) => navigate(`suppliers/orders/${id}`)}
           onBack={goBack}
         />
       </div>

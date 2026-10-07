@@ -468,6 +468,23 @@ select {
   cursor: default;
 }
 
+/* «Меньше» и «Больше» у позиции заказа: две цели нажатия рядом, каждая не меньше 44 px по высоте —
+   палец у полки не должен попадать мимо. */
+.row-steppers {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.row-steppers .row-action {
+  min-height: 44px;
+  min-width: 64px;
+  padding: 4px 10px;
+  text-align: center;
+  border-radius: 10px;
+  background: var(--fill);
+}
+
 .tone-link {
   color: var(--link);
 }

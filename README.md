@@ -6,6 +6,7 @@
 - Требования — [`docs/TZ.md`](docs/TZ.md)
 - Ход работ — [`docs/PROGRESS.md`](docs/PROGRESS.md)
 - Принятые решения — [`docs/DECISIONS.md`](docs/DECISIONS.md)
+- Чужой опыт и граница «что можно брать» — [`docs/ANALOGS.md`](docs/ANALOGS.md)
 
 Репозиторий публичный: в нём нет паролей, ключей, адресов серверов и настоящих персональных данных.
 

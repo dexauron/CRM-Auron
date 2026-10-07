@@ -26,11 +26,22 @@ describe('КАТ-6: адрес и возврат из карточки', () => {
 describe('ПСТ-1: адреса поставщиков', () => {
   const id = '10000000-0000-4000-8000-000000000001';
   it('список и карточка; «Назад» из карточки — к списку, из списка — на главную', () => {
-    expect(screenFromHash('#suppliers')).toEqual({ name: 'suppliers', supplierId: null });
-    expect(screenFromHash(`#suppliers/${id}`)).toEqual({ name: 'suppliers', supplierId: id });
-    expect(parentHash({ name: 'suppliers', supplierId: id })).toBe('suppliers');
-    expect(parentHash({ name: 'suppliers', supplierId: null })).toBe('');
+    expect(screenFromHash('#suppliers')).toEqual({ name: 'suppliers', supplierId: null, orders: false, orderId: null });
+    expect(screenFromHash(`#suppliers/${id}`)).toEqual({ name: 'suppliers', supplierId: id, orders: false, orderId: null });
+    expect(parentHash({ name: 'suppliers', supplierId: id, orders: false, orderId: null })).toBe('suppliers');
+    expect(parentHash({ name: 'suppliers', supplierId: null, orders: false, orderId: null })).toBe('');
     expect(screenFromHash('#suppliers/не-uuid')).toEqual({ name: 'home' });
+  });
+});
+
+describe('ПСТ-2: адреса заказов поставщикам', () => {
+  const id = '10000000-0000-4000-8000-000000000001';
+  it('заказы внутри «Поставщиков»; «Назад» ведёт по шагам, а не на главную', () => {
+    expect(screenFromHash('#suppliers/orders')).toEqual({ name: 'suppliers', supplierId: null, orders: true, orderId: null });
+    expect(screenFromHash(`#suppliers/orders/${id}`)).toEqual({ name: 'suppliers', supplierId: null, orders: true, orderId: id });
+    expect(parentHash(screenFromHash(`#suppliers/orders/${id}`))).toBe('suppliers/orders');
+    expect(parentHash(screenFromHash('#suppliers/orders'))).toBe('suppliers');
+    expect(screenFromHash('#suppliers/orders/не-uuid')).toEqual({ name: 'home' });
   });
 });
 
