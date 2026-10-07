@@ -5,16 +5,23 @@ export type Screen = { name: 'home' } | {
   name: 'catalog'; groupId: string | null; productId: string | null; tools: boolean; issueKind: IssueKind | null;
   /** «Закончилось на полке» (ПСТ-3). */
   restock: boolean;
-} | { name: 'suppliers'; supplierId: string | null };
+} | {
+  name: 'suppliers'; supplierId: string | null;
+  /** Заказы поставщикам (ПСТ-2) живут внутри раздела «Поставщики»: отдельной плитки на главной нет. */
+  orders: boolean; orderId: string | null;
+};
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 const CATALOG_HASH = new RegExp(`^#catalog(?:/(${UUID}))?(?:/item/(${UUID}))?$`);
 const TOOLS_HASH = new RegExp(`^#catalog/tools(?:/(${issueKinds.join('|')}))?(?:/item/(${UUID}))?$`);
 const SUPPLIERS_HASH = new RegExp(`^#suppliers(?:/(${UUID}))?$`);
+const ORDERS_HASH = new RegExp(`^#suppliers/orders(?:/(${UUID}))?$`);
 const RESTOCK_HASH = new RegExp(`^#catalog/restock(?:/item/(${UUID}))?$`);
 
 export function screenFromHash(hash: string): Screen {
+  const orders = ORDERS_HASH.exec(hash);
+  if (orders) return { name: 'suppliers', supplierId: null, orders: true, orderId: orders[1] ?? null };
   const suppliers = SUPPLIERS_HASH.exec(hash);
-  if (suppliers) return { name: 'suppliers', supplierId: suppliers[1] ?? null };
+  if (suppliers) return { name: 'suppliers', supplierId: suppliers[1] ?? null, orders: false, orderId: null };
   const restock = RESTOCK_HASH.exec(hash);
   if (restock) return { name: 'catalog', groupId: null, productId: restock[1] ?? null, tools: false, issueKind: null, restock: true };
   const tools = TOOLS_HASH.exec(hash);
@@ -38,7 +45,11 @@ export function catalogListHash(screen: Extract<Screen, { name: 'catalog' }>): s
 
 /** Родитель прямой ссылки, если внутри приложения ещё нет истории переходов. */
 export function parentHash(screen: Screen): string {
-  if (screen.name === 'suppliers') return screen.supplierId ? 'suppliers' : '';
+  if (screen.name === 'suppliers') {
+    if (screen.orderId) return 'suppliers/orders';
+    if (screen.orders) return 'suppliers';
+    return screen.supplierId ? 'suppliers' : '';
+  }
   if (screen.name !== 'catalog') return '';
   if (screen.productId) return catalogListHash(screen);
   if (screen.tools) return screen.issueKind ? 'catalog/tools' : 'catalog';

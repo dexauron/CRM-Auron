@@ -14,6 +14,7 @@ import { keepAwake } from '../../shared/wakeLock';
 import { readRows } from '../catalog/import1c/read';
 import { parseContactsReport, type ContactRec } from './contacts1c';
 import { ContactForm, SupplierForm, type SaveError } from './SupplierForms';
+import { OrderCard, OrdersList } from './Orders';
 
 const t = ru.suppliers;
 
@@ -36,11 +37,18 @@ function summary(s: Supplier): string {
   return [s.kind && t.kinds[s.kind], ...agents, phone && formatPhone(phone)].filter(Boolean).join(' · ');
 }
 
-export function SuppliersScreen({ orgs, supplierId, accountLoading, onOpen, onBack }: {
+export function SuppliersScreen({
+  orgs, supplierId, orders, orderId, accountLoading, onOpen, onOpenOrders, onOpenOrder, onBack,
+}: {
   orgs: readonly SupplierOrg[];
   supplierId: string | null;
+  /** Открыты заказы поставщикам (ПСТ-2), а не справочник. */
+  orders: boolean;
+  orderId: string | null;
   accountLoading: boolean;
   onOpen: (id: string) => void;
+  onOpenOrders: () => void;
+  onOpenOrder: (id: string) => void;
   onBack: () => void;
 }) {
   const org = orgs[0] ?? null;
@@ -65,9 +73,13 @@ export function SuppliersScreen({ orgs, supplierId, accountLoading, onOpen, onBa
       : prev));
 
   const supplier = load.kind === 'ready' && supplierId ? load.suppliers.find((s) => s.id === supplierId) ?? null : null;
-  const header = supplierId
-    ? <LargeTitle title={supplier?.name ?? t.title} back={{ label: t.title, onClick: onBack }} />
-    : <LargeTitle title={t.title} back={{ label: ru.appName, onClick: onBack }} />;
+  const header = orderId
+    ? <LargeTitle title={t.orders.cardTitle} back={{ label: t.orders.title, onClick: onBack }} />
+    : orders
+      ? <LargeTitle title={t.orders.title} back={{ label: t.title, onClick: onBack }} />
+      : supplierId
+        ? <LargeTitle title={supplier?.name ?? t.title} back={{ label: t.title, onClick: onBack }} />
+        : <LargeTitle title={t.title} back={{ label: ru.appName, onClick: onBack }} />;
 
   if (!org) {
     return (
@@ -79,6 +91,19 @@ export function SuppliersScreen({ orgs, supplierId, accountLoading, onOpen, onBa
           ) : (
             <Section footer={t.noAccessFooter}><Row title={t.noAccess} tone="muted" /></Section>
           )}
+        </main>
+      </>
+    );
+  }
+
+  if (orders) {
+    return (
+      <>
+        {header}
+        <main>
+          {orderId
+            ? <OrderCard orgId={org.orgId} orderId={orderId} canManage={org.canEdit} />
+            : <OrdersList orgId={org.orgId} onOpenOrder={onOpenOrder} />}
         </main>
       </>
     );
@@ -120,7 +145,8 @@ export function SuppliersScreen({ orgs, supplierId, accountLoading, onOpen, onBa
             <Section><Row title={t.notFoundCard} tone="muted" /></Section>
           )
         ) : (
-          <SupplierList org={org} suppliers={load.suppliers} realData={load.realData} onOpen={onOpen} onChange={replace}
+          <SupplierList org={org} suppliers={load.suppliers} realData={load.realData} onOpen={onOpen}
+            onOpenOrders={onOpenOrders} onChange={replace}
             onImported={() => void loadSuppliers(org.orgId).then(
               (suppliers) => setLoad((prev) => (prev.kind === 'ready' ? { ...prev, suppliers } : prev)),
               () => undefined,
@@ -131,11 +157,12 @@ export function SuppliersScreen({ orgs, supplierId, accountLoading, onOpen, onBa
   );
 }
 
-function SupplierList({ org, suppliers, realData, onOpen, onChange, onImported }: {
+function SupplierList({ org, suppliers, realData, onOpen, onOpenOrders, onChange, onImported }: {
   org: SupplierOrg;
   suppliers: Supplier[];
   realData: boolean;
   onOpen: (id: string) => void;
+  onOpenOrders: () => void;
   onChange: (s: Supplier) => void;
   onImported: () => void;
 }) {
@@ -157,6 +184,11 @@ function SupplierList({ org, suppliers, realData, onOpen, onChange, onImported }
           </button>
         )}
       </label>
+
+      <Section>
+        <Row leading={<Icon name="truck" className="row-icon" />} title={t.orders.entry} subtitle={t.orders.entryHint}
+          chevron onClick={onOpenOrders} />
+      </Section>
 
       <Section footer={active.length ? t.count(active.length) : undefined}>
         {found.length === 0 && <Row title={active.length ? t.notFound : t.empty} tone="muted" />}

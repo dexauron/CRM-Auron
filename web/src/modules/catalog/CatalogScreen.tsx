@@ -187,9 +187,10 @@ interface Props {
   /** Магазины, где человек отмечает пустые полки (владелец, управляющий, сотрудник зала). */
   restockOrgIds: readonly string[];
   onOpenRestock: () => void;
+  onOpenOrder: (id: string) => void;
 }
 
-export function CatalogScreen({ groupId, productId, tools, issueKind, viewerId, accountLoading, onOpenTools, onOpenGroup, onOpenProduct, onBack, editableOrgIds, privilegedOrgIds, ownerOrgIds, rivalReaderOrgIds, rivalWriterOrgIds, restock, restockOrgIds, onOpenRestock }: Props) {
+export function CatalogScreen({ groupId, productId, tools, issueKind, viewerId, accountLoading, onOpenTools, onOpenGroup, onOpenProduct, onBack, editableOrgIds, privilegedOrgIds, ownerOrgIds, rivalReaderOrgIds, rivalWriterOrgIds, restock, restockOrgIds, onOpenRestock, onOpenOrder }: Props) {
   const [reload, setReload] = useState(0);
   const [load, setLoad] = useState<Load>({ kind: 'loading' });
   const [sync, setSync] = useState<Sync>('checking');
@@ -370,7 +371,8 @@ export function CatalogScreen({ groupId, productId, tools, issueKind, viewerId, 
           {load.kind === 'loading' || accountLoading ? (
             <Section><Row leading={<span className="spinner" />} title={t.loading} tone="muted" /></Section>
           ) : ready && allowed ? (
-            <RestockList key={`${ready.store.id}:${viewerId ?? ''}`} orgId={ready.store.id} onOpenProduct={onOpenProduct} />
+            <RestockList key={`${ready.store.id}:${viewerId ?? ''}`} orgId={ready.store.id}
+              onOpenProduct={onOpenProduct} onOpenOrder={onOpenOrder} />
           ) : (
             <Section footer={t.denied}><Row title={t.noAccess} tone="muted" /></Section>
           )}
