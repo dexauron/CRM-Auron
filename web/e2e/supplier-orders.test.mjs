@@ -104,7 +104,11 @@ async function withPage(options, run) {
       const hide = (o) => (money ? o : { ...o, amount: null, amount_actual: null });
       return reply({
         money,
-        orders: [hide(row({ ...state.order, items: 2, no_price: 0, overdue: false })), hide(row({ id: lateId, expected_at: '2026-10-01', amount: 40000, overdue: true, items: 1, no_price: 1 }))],
+        orders: [
+          hide(row({ ...state.order, items: 2, no_price: 0, overdue: false })),
+          hide(row({ id: lateId, supplier_name: 'ИП Вымышленный пекарь', expected_at: '2026-10-01',
+            amount: 40000, overdue: true, items: 1, no_price: 1 })),
+        ],
         days: [
           { date: '2026-10-01', orders: 1, amount: money ? 40000 : null, overdue: true },
           { date: '2026-10-09', orders: 1, amount: money ? 152925 : null, overdue: false },
@@ -169,10 +173,12 @@ test('ПСТ-2: день календаря отбирает свои заказ
     await page.goto(`${base}#suppliers/orders`);
     await page.getByText('Ждали раньше: 1 · 400,00 ₽', { exact: true }).waitFor();
     await page.getByRole('button', { name: /^09\.10\.2026/ }).click();
-    await page.getByRole('button', { name: 'Все дни', exact: true }).waitFor();
-    assert.equal(await page.getByRole('button', { name: /ООО Молочный опт/ }).count(), 1);
+    // Ждём, а не замеряем: count() не дожидается перерисовки, и на медленной машине
+    // замер попадал бы в момент до неё.
+    await page.getByRole('button', { name: /ИП Вымышленный пекарь/ }).waitFor({ state: 'hidden' });
+    await page.getByRole('button', { name: /ООО Молочный опт/ }).waitFor();
     await page.getByRole('button', { name: 'Все дни', exact: true }).click();
-    assert.equal(await page.getByRole('button', { name: /ООО Молочный опт/ }).count(), 2);
+    await page.getByRole('button', { name: /ИП Вымышленный пекарь/ }).waitFor();
   });
 });
 
@@ -197,9 +203,9 @@ test('ПСТ-2: заказ ведётся по шагам — количеств
     await page.getByRole('button', { name: 'Поставщик подтвердил', exact: true }).click();
     await page.getByRole('button', { name: 'Принять поставку', exact: true }).waitFor();
     await page.getByText('Подтверждён поставщиком', { exact: true }).first().waitFor();
-    // Состав заморожен: шагов количества больше нет.
-    assert.equal(await page.getByRole('button', { name: 'Больше' }).count(), 0);
+    // Состав заморожен: сначала дожидаемся подписи об этом, потом проверяем, что шагов нет.
     await page.getByText('Состав меняют, пока поставщик не подтвердил заказ.', { exact: true }).waitFor();
+    assert.equal(await page.getByRole('button', { name: 'Больше' }).count(), 0);
 
     page.once('dialog', (dialog) => void dialog.accept('15 400,50'));
     await page.getByRole('button', { name: 'Принять поставку', exact: true }).click();
@@ -245,8 +251,8 @@ test('ПСТ-2: из списка «Закончилось на полке» з�
     assert.equal(await page.getByRole('button', { name: 'Оформить заказ поставщику', exact: true }).count(), 1);
     await page.screenshot({ path: 'test-results/supplier-orders/restock-staff.png', fullPage: true });
     await page.getByRole('button', { name: 'Оформить заказ поставщику', exact: true }).click();
-    await page.getByRole('heading', { name: 'ООО Молочный опт', exact: true }).waitFor();
-    assert.equal(page.url(), `${base}#suppliers/orders/${newId}`);
+    await page.waitForURL(`${base}#suppliers/orders/${newId}`);
+    await page.getByRole('heading', { name: 'Состав заказа', exact: true }).waitFor();
     assert.equal(state.createCalls.length, 1);
     assert.deepEqual(state.createCalls[0].p_items, [{ product_id: milkId, qty: 1 }]);
     assert.deepEqual(state.createCalls[0].p_marks, ['m1']);
